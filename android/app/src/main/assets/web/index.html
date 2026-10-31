@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Time Pressure — Think · Read · Act</title>
+  <script>
+    let initialTheme = "dark";
+    try {
+      const savedTheme = localStorage.getItem("time-pressure-theme");
+      if (savedTheme === "light" || savedTheme === "dark") {
+        initialTheme = savedTheme;
+      }
+    } catch (error) {}
+    document.documentElement.dataset.theme = initialTheme;
+    document.documentElement.style.colorScheme = initialTheme;
+  </script>
+  <link rel="stylesheet" href="styles/main.css" />
+</head>
+<body>
+  <div id="app" class="app-shell"></div>
+
+  <!-- Modular Architecture: Data -> Engine -> UI -> Bootstrap -->
+  <script src="src/data/i18n.js"></script>
+  <script src="src/data/rules.js"></script>
+  <script src="src/data/levels.js"></script>
+  <script src="src/engine/validator.js"></script>
+  <script src="src/engine/gameController.js"></script>
+  <script src="src/ui/sound.js"></script>
+  <script src="src/ui/renderer.js"></script>
+  <script src="src/main.js"></script>
+</body>
+</html>

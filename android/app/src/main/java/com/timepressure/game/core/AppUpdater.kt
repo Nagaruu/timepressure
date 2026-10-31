@@ -98,7 +98,8 @@ object AppUpdater {
      */
     fun startUpdateDownload(context: Context, updateInfo: UpdateInfo) {
         val fileName = "time-pressure-${updateInfo.tag}.apk"
-        val destinationFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
+        val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+        val destinationFile = File(dir, fileName)
         if (destinationFile.exists()) {
             destinationFile.delete()
         }
@@ -132,7 +133,7 @@ object AppUpdater {
             context.registerReceiver(
                 onCompleteReceiver,
                 IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                Context.RECEIVER_NOT_EXPORTED
+                Context.RECEIVER_EXPORTED
             )
         } else {
             context.registerReceiver(
@@ -173,4 +174,3 @@ object AppUpdater {
         context.startActivity(installIntent)
     }
 }
-

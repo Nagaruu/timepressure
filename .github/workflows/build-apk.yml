@@ -73,8 +73,8 @@ jobs:
       - name: Build APK with Release Keystore
         run: |
           cd android
-          chmod +x gradlew || true
-          gradle assembleRelease -PappVersionCode=${{ steps.ver.outputs.vcode }} -PappVersionName="1.0.${{ steps.ver.outputs.vcode }}"
+          chmod +x gradlew
+          ./gradlew assembleRelease -PappVersionCode=${{ steps.ver.outputs.vcode }} -PappVersionName="1.0.${{ steps.ver.outputs.vcode }}"
 
       - name: Prepare APK Asset
         run: |

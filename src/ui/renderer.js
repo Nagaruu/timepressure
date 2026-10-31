@@ -125,6 +125,22 @@
 
   const THEME_STORAGE_KEY = "time-pressure-theme";
 
+  const HOME_ICON = `
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5.5 9.5V21h13V9.5" />
+      <path d="M9.5 21v-6h5v6" />
+    </svg>
+  `;
+
+  const UPDATE_ICON = `
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 3v12" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M3 21h18" />
+    </svg>
+  `;
+
   function renderStimulusVisual(stimKey) {
     if (REAL_ANIMAL_IMAGES[stimKey]) {
       return `
@@ -212,13 +228,20 @@
       });
 
       // Close help tooltip when clicking outside on start screen
-      this.root.addEventListener("click", () => {
+      this.root.addEventListener("click", (event) => {
         if (this.helpOpen) {
           this.helpOpen = false;
           const tooltip = this.root.querySelector(".help-tooltip");
           const hBtn = this.root.querySelector('.help-wrapper [data-action="toggle-help"]');
           if (tooltip) tooltip.classList.remove("open");
           if (hBtn) hBtn.classList.remove("active");
+        }
+
+        const homeBtn = event.target.closest?.('[data-action="return-home"]');
+        if (homeBtn) {
+          event.preventDefault();
+          event.stopPropagation();
+          this._requestHome();
         }
       });
     }
@@ -273,6 +296,61 @@
 
       this.lastScreen = state.screen;
       this.lastRoundIndex = state.roundIndex;
+    }
+
+    _requestHome() {
+      const screen = this.controller.state.screen;
+      if (screen === "playing" || screen === "rule_intro") {
+        this._showHomeConfirm();
+        return;
+      }
+      this.controller.returnToStart();
+    }
+
+    _showHomeConfirm() {
+      if (this.root.querySelector(".home-confirm-overlay")) return;
+
+      const lang = this.controller.config.lang;
+      this.controller.pauseRound();
+
+      const overlay = document.createElement("div");
+      overlay.className = "home-confirm-overlay";
+      overlay.innerHTML = `
+        <div class="home-confirm-card" role="dialog" aria-modal="true" aria-labelledby="home-confirm-title">
+          <div class="home-confirm-icon">${HOME_ICON}</div>
+          <h2 class="home-confirm-title" id="home-confirm-title">${t(lang, "homeConfirmTitle")}</h2>
+          <p class="home-confirm-message">${t(lang, "homeConfirmMessage")}</p>
+          <div class="home-confirm-actions">
+            <button type="button" class="home-confirm-btn stay" data-action="cancel-home">
+              ${t(lang, "homeConfirmStay")}
+            </button>
+            <button type="button" class="home-confirm-btn leave" data-action="confirm-home">
+              ${t(lang, "homeConfirmLeave")}
+            </button>
+          </div>
+        </div>
+      `;
+
+      const close = (leave) => {
+        overlay.remove();
+        if (leave) {
+          this.controller.returnToStart();
+        } else {
+          this.controller.resumeRound();
+        }
+      };
+
+      overlay.querySelector('[data-action="cancel-home"]').addEventListener("click", () => {
+        close(false);
+      });
+      overlay.querySelector('[data-action="confirm-home"]').addEventListener("click", () => {
+        close(true);
+      });
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) close(false);
+      });
+
+      this.root.appendChild(overlay);
     }
 
     _renderStartScreen(lang) {
@@ -340,6 +418,10 @@
                 }
               </button>
 
+              <button type="button" class="circle-icon-btn update-icon-btn" data-action="check-update" aria-label="${t(lang, "updateBtn")}" title="${t(lang, "updateBtn")}">
+                ${UPDATE_ICON}
+              </button>
+
               <div class="help-wrapper">
                 <button type="button" class="circle-icon-btn ${this.helpOpen ? "active" : ""}" data-action="toggle-help" aria-label="Info">i</button>
                 <div class="help-tooltip ${this.helpOpen ? "open" : ""}" role="tooltip">
@@ -353,9 +435,9 @@
           <div class="start-center-stage">
             <div class="title-block">
               <h1 class="pressure-logo-title" aria-label="TIME PRESSURE">
-                <span>T</span><span>I</span><span>M</span><span>E</span>
-                <span class="title-word-gap"></span>
-                <span>P</span><span>R</span><span>E</span><span>S</span><span>S</span><span class="red-u-glyph"><svg viewBox="0 0 46 54" class="red-u-svg" aria-hidden="true"><path d="M8 10v22c0 8.5 6.2 14.5 14.5 14.5S37 40.5 37 32V12" fill="none" stroke="#e11d48" stroke-width="8.5" stroke-linecap="square"/><polygon points="37,2 27,15 45,15" fill="#ef4444"/></svg></span><span>R</span><span>E</span>
+                <span class="title-word"><span>T</span><span>I</span><span>M</span><span>E</span></span>
+                <span class="title-word-gap" aria-hidden="true"></span>
+                <span class="title-word"><span>P</span><span>R</span><span>E</span><span>S</span><span>S</span><span class="red-u-glyph"><svg viewBox="0 0 46 54" class="red-u-svg" aria-hidden="true"><path d="M8 10v22c0 8.5 6.2 14.5 14.5 14.5S37 40.5 37 32V12" fill="none" stroke="#e11d48" stroke-width="8.5" stroke-linecap="square"/><polygon points="37,2 27,15 45,15" fill="#ef4444"/></svg></span><span>R</span><span>E</span></span>
               </h1>
               <p class="pressure-logo-subtitle">${t(lang, "appSubtitle")}</p>
             </div>
@@ -465,6 +547,18 @@
         });
       }
 
+      const updateBtn = this.root.querySelector('[data-action="check-update"]');
+      if (updateBtn) {
+        updateBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (global.AndroidBridge && typeof global.AndroidBridge.checkForUpdates === "function") {
+            global.AndroidBridge.checkForUpdates(lang);
+          } else {
+            global.open("https://github.com/Nagaruu/timepressure/releases/latest", "_blank", "noopener");
+          }
+        });
+      }
+
       this.root.querySelectorAll('[data-action="toggle-help"]').forEach((btn) => {
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
@@ -537,6 +631,10 @@
         <div class="screen rule-intro-screen${isFake ? " fake-rule-screen" : ""}">
           <div class="start-bg-facets" aria-hidden="true"></div>
           ${this._renderPerimeterTimerSvg(urgency)}
+
+          <button type="button" class="circle-icon-btn home-corner-btn" data-action="return-home" aria-label="${t(lang, "homeBtn")}" title="${t(lang, "homeBtn")}">
+            ${HOME_ICON}
+          </button>
 
           <div class="rule-intro-center">
             <span class="rule-intro-badge ${badgeClass}">
@@ -638,10 +736,16 @@
 
           <div class="play-content-container">
             <header class="minimal-round-header">
+              <span class="round-header-spacer" aria-hidden="true"></span>
               <div class="round-pill">
                 <span class="round-pill-dot"></span>
                 <span>${t(lang, "roundOnlyLabel", { round: roundData.round })}</span>
               </div>
+              ${
+                state.roundClearedWait
+                  ? '<span class="round-header-spacer" aria-hidden="true"></span>'
+                  : `<button type="button" class="circle-icon-btn home-corner-btn" data-action="return-home" aria-label="${t(lang, "homeBtn")}" title="${t(lang, "homeBtn")}">${HOME_ICON}</button>`
+              }
             </header>
 
             <main class="stage-area">
@@ -763,10 +867,16 @@
 
             ${diagnosticHtml}
 
-            <button type="button" class="cyber-start-btn" data-action="play-again">
-              <span class="cyber-play-icon" aria-hidden="true">▶</span>
-              <span>${t(lang, "playAgainBtn")}</span>
-            </button>
+            <div class="summary-actions">
+              <button type="button" class="cyber-start-btn summary-home-btn" data-action="return-home">
+                <span class="cyber-home-icon" aria-hidden="true">${HOME_ICON}</span>
+                <span>${t(lang, "homeBtn")}</span>
+              </button>
+              <button type="button" class="cyber-start-btn" data-action="play-again">
+                <span class="cyber-play-icon" aria-hidden="true">▶</span>
+                <span>${t(lang, "playAgainBtn")}</span>
+              </button>
+            </div>
           </div>
         </div>
       `;

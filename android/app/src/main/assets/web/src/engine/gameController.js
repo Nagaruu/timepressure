@@ -42,11 +42,13 @@
 
       this._rafId = null;
       this._nextRoundTimeoutId = null;
-      this._roundStartTime = 0;
+      this._roundStartTime = null;
       this._roundDurationMs = 0;
       this._lastWholeSecond = null;
       this._currentTimeLimit = 0;
       this._previousRoundPressHistory = [];
+      this._isPaused = false;
+      this._pausedRemainingMs = 0;
     }
 
     setConfig(partialConfig) {
@@ -79,6 +81,8 @@
 
     _beginRound(roundIndex) {
       this._stopTimers();
+      this._isPaused = false;
+      this._pausedRemainingMs = 0;
 
       const originalRoundData = this.levels[roundIndex];
       const prevPressHistory =
@@ -130,7 +134,7 @@
         if (this.sound) this.sound.playRuleUnlock();
         this.state.screen = "rule_intro";
         this._roundDurationMs = 7000;
-        this._roundStartTime = performance.now();
+        this._roundStartTime = null;
         this._lastWholeSecond = 7;
         this._notify();
         this._startRuleIntroTimerLoop();
@@ -149,15 +153,19 @@
 
       const timeLimit = this._currentTimeLimit || roundData.timeLimit;
       this._roundDurationMs = timeLimit * 1000;
-      this._roundStartTime = performance.now();
+      this._roundStartTime = null;
       this._lastWholeSecond = Math.ceil(timeLimit);
+      this._isPaused = false;
+      this._pausedRemainingMs = 0;
 
       this._notify();
       this._startTimerLoop();
     }
 
     handleButtonPress(color) {
-      if (this.state.screen !== "playing" || this.state.roundClearedWait) return;
+      if (this.state.screen !== "playing" || this.state.roundClearedWait || this._isPaused) {
+        return;
+      }
 
       if (this.sound) {
         this.sound.playButtonPress(color);
@@ -172,8 +180,39 @@
 
     returnToStart() {
       this._stopTimers();
+      this._isPaused = false;
+      this._pausedRemainingMs = 0;
       this.state.screen = "start";
       this._notify();
+    }
+
+    pauseRound() {
+      if (this._isPaused) return;
+      if (this.state.screen !== "playing" && this.state.screen !== "rule_intro") return;
+      if (this.state.roundClearedWait) return;
+
+      this._isPaused = true;
+      if (this._roundStartTime === null) {
+        this._pausedRemainingMs = this._roundDurationMs;
+      } else {
+        const elapsed = performance.now() - this._roundStartTime;
+        this._pausedRemainingMs = Math.max(0, this._roundDurationMs - elapsed);
+      }
+      this._stopTimers();
+    }
+
+    resumeRound() {
+      if (!this._isPaused) return;
+
+      this._isPaused = false;
+      const remainingMs = Math.max(0, this._pausedRemainingMs);
+      this._roundStartTime = performance.now() - (this._roundDurationMs - remainingMs);
+
+      if (this.state.screen === "rule_intro") {
+        this._startRuleIntroTimerLoop();
+      } else if (this.state.screen === "playing") {
+        this._startTimerLoop();
+      }
     }
 
     _triggerRoundCleared() {
@@ -215,7 +254,8 @@
 
     _startRuleIntroTimerLoop() {
       const tick = (now) => {
-        if (this.state.screen !== "rule_intro") return;
+        if (this.state.screen !== "rule_intro" || this._isPaused) return;
+        if (this._roundStartTime === null) this._roundStartTime = now;
 
         const elapsed = now - this._roundStartTime;
         const remainingMs = Math.max(0, this._roundDurationMs - elapsed);
@@ -240,7 +280,10 @@
 
     _startTimerLoop() {
       const tick = (now) => {
-        if (this.state.screen !== "playing" || this.state.roundClearedWait) return;
+        if (this.state.screen !== "playing" || this.state.roundClearedWait || this._isPaused) {
+          return;
+        }
+        if (this._roundStartTime === null) this._roundStartTime = now;
 
         const elapsed = now - this._roundStartTime;
         const remainingMs = Math.max(0, this._roundDurationMs - elapsed);

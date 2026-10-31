@@ -34,19 +34,29 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
 import com.timepressure.game.BuildConfig
 import com.timepressure.game.core.AppUpdater
+import kotlinx.coroutines.launch
 
-class WebAppBridge {
+class WebAppBridge(private val onCheckForUpdates: (String) -> Unit) {
     @JavascriptInterface
     fun getAppVersion(): String {
         return "v${BuildConfig.VERSION_CODE} (${BuildConfig.VERSION_NAME})"
+    }
+
+    @JavascriptInterface
+    fun checkForUpdates(lang: String) {
+        onCheckForUpdates(lang)
     }
 }
 
 class MainActivity : ComponentActivity() {
 
     private var webViewRef: WebView? = null
+    private var availableUpdate by mutableStateOf<AppUpdater.UpdateInfo?>(null)
+    private var isCheckingUpdate by mutableStateOf(false)
+    private var updateLang: String = "vi"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,17 +64,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 val context = LocalContext.current
-                var availableUpdate by remember { mutableStateOf<AppUpdater.UpdateInfo?>(null) }
 
                 // Tự động kiểm tra bản cập nhật mới từ GitHub khi mở game (giống app con-say)
                 LaunchedEffect(Unit) {
-                    try {
-                        val res = AppUpdater.checkForUpdates()
-                        if (res is AppUpdater.CheckResult.UpdateAvailable) {
-                            availableUpdate = res.info
-                        }
-                    } catch (_: Throwable) {
-                    }
+                    requestUpdateCheck()
                 }
 
                 Box(
@@ -191,6 +194,46 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun requestUpdateCheck(lang: String = updateLang, manual: Boolean = false) {
+        updateLang = lang
+        if (manual) {
+            val message = if (lang == "en") "Checking for updates..." else "Đang kiểm tra cập nhật..."
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        }
+        if (isCheckingUpdate) return
+
+        isCheckingUpdate = true
+        lifecycleScope.launch {
+            val result = try {
+                AppUpdater.checkForUpdates()
+            } catch (e: Throwable) {
+                AppUpdater.CheckResult.Error(e.localizedMessage ?: "Unknown error")
+            }
+            isCheckingUpdate = false
+
+            when (result) {
+                is AppUpdater.CheckResult.UpdateAvailable -> {
+                    availableUpdate = result.info
+                }
+                AppUpdater.CheckResult.UpToDate -> {
+                    if (manual) {
+                        val message = if (updateLang == "en") {
+                            "You are using the latest version."
+                        } else {
+                            "Bạn đang dùng bản mới nhất."
+                        }
+                        Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
+                    }
+                }
+                is AppUpdater.CheckResult.Error -> {
+                    if (manual) {
+                        Toast.makeText(this@MainActivity, result.message, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView(webView: WebView) {
         try {
@@ -209,7 +252,12 @@ class MainActivity : ComponentActivity() {
             webView.isVerticalScrollBarEnabled = false
             webView.isHorizontalScrollBarEnabled = false
             webView.setBackgroundColor(android.graphics.Color.parseColor("#09090D"))
-            webView.addJavascriptInterface(WebAppBridge(), "AndroidBridge")
+            webView.addJavascriptInterface(
+                WebAppBridge { lang ->
+                    runOnUiThread { requestUpdateCheck(lang, manual = true) }
+                },
+                "AndroidBridge"
+            )
             webView.webChromeClient = WebChromeClient()
             webView.webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {

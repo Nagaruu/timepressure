@@ -25,7 +25,9 @@ Phiên bản Android độc lập cho game **Time Pressure**, được đóng g�
 Mặc định repo đang trỏ tới:
 ```kotlin
 // Trong AppUpdater.kt
-var githubRepo: String = "Nagaruu/time-pressure"
+var githubRepo: String = "Nagaruu/timepressure"
 ```
-Khi bạn tạo repository trên GitHub (ví dụ: `https://github.com/Nagaruu/time-pressure`), hệ thống GitHub Actions sẽ tự động biên dịch file `app-debug.apk` và gắn vào Release để ứng dụng tự tải về.
+Khi bạn tạo repository trên GitHub (ví dụ: `https://github.com/Nagaruu/timepressure`), hệ thống GitHub Actions sẽ tự động biên dịch file `app-debug.apk` và gắn vào Release để ứng dụng tự tải về.
+
+Ngoài banner tự động khi có bản mới, trang chủ còn có nút **Cập nhật phần mềm** ở góc phải trên để kiểm tra thủ công. Nếu đang dùng bản mới nhất, app sẽ thông báo; nếu có bản mới, banner tải và cài đặt sẽ hiện ra.
 

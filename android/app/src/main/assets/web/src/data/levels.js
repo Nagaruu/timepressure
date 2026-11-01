@@ -24,10 +24,12 @@
 (function (global) {
   const { RuleFactories, RuleEngine } = global.PressGame || require("./rules.js");
 
-  const ANIMALS = ["dog", "cat", "mouse"];
+  const ANIMALS = ["cat", "mouse", "dog"];
   const STIMULI = [...ANIMALS, "lion"];
   const TOTAL_ROUNDS = 60;
   const ANIMAL_SCHEDULE_END = 39;
+  const DOG_MIN_ROUND = 50;
+  const DOG_MAX_ROUND = 58;
   const LION_SIGHTING_MIN = 40;
   const LION_SIGHTING_MAX = 60;
   const HIGH_PRESS_TIME_THRESHOLD = 6;
@@ -1274,13 +1276,15 @@
   function buildAnimalSchedule(
     blockedRounds,
     {
+      animals = ["cat", "mouse"],
       minGap = ANIMAL_APPEARANCE_MIN_GAP,
       delayMin = ANIMAL_RULE_DELAY_MIN,
-      delayMax = ANIMAL_RULE_DELAY_MAX
+      delayMax = ANIMAL_RULE_DELAY_MAX,
+      scheduleEnd = ANIMAL_SCHEDULE_END
     } = {}
   ) {
     const allowedRounds = [];
-    for (let r = 4; r <= ANIMAL_SCHEDULE_END; r++) {
+    for (let r = 4; r <= scheduleEnd; r++) {
       if (!blockedRounds.has(r)) allowedRounds.push(r);
     }
 
@@ -1292,11 +1296,11 @@
     function search() {
       visitedNodes++;
       if (visitedNodes > maxNodes) return false;
-      if (pairs.length === ANIMALS.length) return true;
+      if (pairs.length === animals.length) return true;
 
       const introCandidates = shuffle(
         allowedRounds.filter(
-          (r) => !usedRounds.has(r) && r <= ANIMAL_SCHEDULE_END - delayMin
+          (r) => !usedRounds.has(r) && r <= scheduleEnd - delayMin
         )
       );
 
@@ -1310,7 +1314,7 @@
 
         for (const delay of delays) {
           const appearanceRound = introRound + delay;
-          if (appearanceRound > ANIMAL_SCHEDULE_END) continue;
+          if (appearanceRound > scheduleEnd) continue;
           if (blockedRounds.has(appearanceRound)) continue;
           if (usedRounds.has(appearanceRound)) continue;
           if (
@@ -1538,24 +1542,44 @@
       ...Object.keys(fruitAppearanceByRound).map(Number)
     ]);
 
-    let animalSchedule = buildAnimalSchedule(animalBlockedRounds);
+    let animalSchedule = buildAnimalSchedule(animalBlockedRounds, {
+      animals: ["cat", "mouse"],
+      scheduleEnd: ANIMAL_SCHEDULE_END
+    });
     if (!animalSchedule) {
       animalSchedule = buildAnimalSchedule(animalBlockedRounds, {
+        animals: ["cat", "mouse"],
         minGap: 2,
         delayMin: 2,
-        delayMax: 8
+        delayMax: 8,
+        scheduleEnd: ANIMAL_SCHEDULE_END
       });
     }
     if (!animalSchedule) {
       animalSchedule = buildAnimalSchedule(animalBlockedRounds, {
+        animals: ["cat", "mouse"],
         minGap: 1,
         delayMin: 2,
-        delayMax: 10
+        delayMax: 10,
+        scheduleEnd: ANIMAL_SCHEDULE_END
       });
     }
     if (!animalSchedule) {
       throw new Error("Unable to build animal schedule");
     }
+
+    // Schedule Dog separately for late-game (Round 50+)
+    const dogIntroCandidates = [];
+    for (let r = DOG_MIN_ROUND; r <= DOG_MAX_ROUND - ANIMAL_RULE_DELAY_MIN; r++) {
+      if (!animalBlockedRounds.has(r)) dogIntroCandidates.push(r);
+    }
+    const dogIntroRound = pickOne(dogIntroCandidates.length > 0 ? dogIntroCandidates : [50, 51, 52]);
+    const dogAppearanceCandidates = [];
+    for (let r = dogIntroRound + ANIMAL_RULE_DELAY_MIN; r <= Math.min(TOTAL_ROUNDS, dogIntroRound + ANIMAL_RULE_DELAY_MAX); r++) {
+      if (!animalBlockedRounds.has(r) && r !== dogIntroRound) dogAppearanceCandidates.push(r);
+    }
+    const dogAppearanceRound = pickOne(dogAppearanceCandidates.length > 0 ? dogAppearanceCandidates : [dogIntroRound + 3]);
+    animalSchedule.push({ introRound: dogIntroRound, appearanceRound: dogAppearanceRound });
 
     const zeroStimulus = pickOne(STIMULI);
     const pressStimuli = shuffle(STIMULI.filter((key) => key !== zeroStimulus));
@@ -1567,7 +1591,9 @@
           ? "additive"
           : "exclusive";
 
-    const animalOrder = shuffle([...ANIMALS]);
+    // Cat and Mouse are early/mid game; Dog is placed in late-game (R50+)
+    const earlyAnimals = shuffle(["cat", "mouse"]);
+    const animalOrder = [...earlyAnimals, "dog"];
     const animalRuleIntroByRound = {};
     const animalAppearanceByRound = {};
     const animalIntroRoundSet = new Set();

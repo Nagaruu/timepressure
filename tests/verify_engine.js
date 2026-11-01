@@ -619,7 +619,11 @@ function runTests() {
         (l) => l.newRuleId === `rule_animal_${key}`
       );
       assert(introLevel, `Campaign must introduce rule_animal_${key}`);
-      assert(introLevel.round < 40, `Animal '${key}' intro must be before R40`);
+      if (key === "dog") {
+        assert(introLevel.round >= 50, `Dog intro must be at Round 50+, got R${introLevel.round}`);
+      } else {
+        assert(introLevel.round < 40, `Animal '${key}' intro must be before R40`);
+      }
       assert(
         !introLevel.stimuli.includes(key),
         `Animal '${key}' must not appear in its rule intro round`
@@ -632,7 +636,11 @@ function runTests() {
         `Animal '${key}' must appear exactly once in the campaign`
       );
       const appearanceLevel = roundsWithAnimal[0];
-      assert(appearanceLevel.round < 40, `Animal '${key}' appearance must be before R40`);
+      if (key === "dog") {
+        assert(appearanceLevel.round >= 52, `Dog appearance must be at Round 52+, got R${appearanceLevel.round}`);
+      } else {
+        assert(appearanceLevel.round < 40, `Animal '${key}' appearance must be before R40`);
+      }
       const delay = appearanceLevel.round - introLevel.round;
       assert(
         delay >= 2,

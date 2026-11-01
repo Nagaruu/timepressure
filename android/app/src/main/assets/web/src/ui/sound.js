@@ -159,7 +159,7 @@
     }
 
     playTick(urgent = false) {
-      this._playTone("sine", urgent ? 580 : 440, 0, 0.04, urgent ? 0.07 : 0.04);
+      this._playTone("sine", urgent ? 580 : 440, 0, 0.04, urgent ? 0.22 : 0.16);
     }
 
     /**
@@ -191,7 +191,7 @@
           freq,
           startOffset: idx * 0.065,
           duration: isLast ? 0.48 : 0.32,
-          peakGain: isLast ? 0.065 : 0.05,
+          peakGain: isLast ? 0.16 : 0.12,
           filterStart: 850,
           filterEnd: 320,
           pan: pans[idx] || 0

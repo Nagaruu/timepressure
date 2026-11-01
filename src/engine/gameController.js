@@ -3,7 +3,7 @@
  * - Generates fresh randomized 60 rounds & dynamic rules on every new game
  * - Shows a dedicated 7-second Rule Presentation screen (no challenge/buttons) whenever a new rule appears
  * - Evaluates answer ONLY when the round timer expires
- * - On Pass: 1-second green pulse -> auto-advance to next round (no explanation screen)
+ * - On Pass: immediate auto-advance to the next round (no waiting pulse)
  * - On Fail: Game Over screen shows detailed explanation of WHY you lost
  */
 (function (global) {
@@ -60,7 +60,7 @@
       this._stopTimers();
 
       if (typeof generateGameLevels === "function") {
-        this.levels = generateGameLevels();
+        this.levels = generateGameLevels(this.config.lang);
       }
       this.ruleEngine.reset(this.levels ? this.levels.customCatalog : null);
 
@@ -134,9 +134,9 @@
         if (this.sound) this.sound.playRuleUnlock();
         this.state.screen = "rule_intro";
         this._roundDurationMs = 7000;
-        this._roundStartTime = null;
         this._lastWholeSecond = 7;
         this._notify();
+        this._roundStartTime = performance.now();
         this._startRuleIntroTimerLoop();
         return;
       }
@@ -153,12 +153,12 @@
 
       const timeLimit = this._currentTimeLimit || roundData.timeLimit;
       this._roundDurationMs = timeLimit * 1000;
-      this._roundStartTime = null;
       this._lastWholeSecond = Math.ceil(timeLimit);
       this._isPaused = false;
       this._pausedRemainingMs = 0;
 
       this._notify();
+      this._roundStartTime = performance.now();
       this._startTimerLoop();
     }
 
@@ -219,20 +219,15 @@
       this._stopTimers();
       if (this.sound) this.sound.playSuccess(this.state.roundIndex);
 
-      this.state.roundClearedWait = true;
-      this._notify();
-
-      this._nextRoundTimeoutId = setTimeout(() => {
-        const nextIdx = this.state.roundIndex + 1;
-        if (nextIdx >= this.levels.length) {
-          this.state.screen = "summary";
-          this.state.victory = true;
-          this.state.roundClearedWait = false;
-          this._notify();
-        } else {
-          this._beginRound(nextIdx);
-        }
-      }, 1000);
+      const nextIdx = this.state.roundIndex + 1;
+      if (nextIdx >= this.levels.length) {
+        this.state.screen = "summary";
+        this.state.victory = true;
+        this.state.roundClearedWait = false;
+        this._notify();
+      } else {
+        this._beginRound(nextIdx);
+      }
     }
 
     _triggerGameOver(evalRes) {
@@ -253,8 +248,9 @@
     }
 
     _startRuleIntroTimerLoop() {
-      const tick = (now) => {
+      const tick = () => {
         if (this.state.screen !== "rule_intro" || this._isPaused) return;
+        const now = performance.now();
         if (this._roundStartTime === null) this._roundStartTime = now;
 
         const elapsed = now - this._roundStartTime;
@@ -279,10 +275,11 @@
     }
 
     _startTimerLoop() {
-      const tick = (now) => {
+      const tick = () => {
         if (this.state.screen !== "playing" || this.state.roundClearedWait || this._isPaused) {
           return;
         }
+        const now = performance.now();
         if (this._roundStartTime === null) this._roundStartTime = now;
 
         const elapsed = now - this._roundStartTime;

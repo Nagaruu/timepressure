@@ -6,7 +6,7 @@
  * - Odd/Even Parity Rule
  * - Bomb First/Forbidden Rule
  * - Finale Last-Button Rule
- * - Color Rule Transfer ("Luật của nút [MÀU CŨ] chuyển sang nút [MÀU MỚI]; nút cũ vẫn bấm được")
+ * - Odd-Fruit Rule ("Nhấn màu của loại quả CÓ MÀU KHÁC BIỆT với các quả còn lại")
  */
 (function (global) {
   const COLOR_NAMES = {
@@ -25,6 +25,109 @@
     mouse: "🐭",
     lion: "🦁"
   };
+
+  /**
+   * Fruit palette used by the Odd-Fruit Rule. Every fruit maps to one of the
+   * pressable button colors so the answer is always reachable.
+   */
+  const FRUIT_POOLS = {
+    red: [
+      { emoji: "🍎", vi: "táo", en: "apple" },
+      { emoji: "🍓", vi: "dâu", en: "strawberry" },
+      { emoji: "🍉", vi: "dưa hấu", en: "watermelon" },
+      { emoji: "🍒", vi: "anh đào", en: "cherry" },
+      { emoji: "🍅", vi: "cà chua", en: "tomato" }
+    ],
+    yellow: [
+      { emoji: "🍌", vi: "chuối", en: "banana" },
+      { emoji: "🍋", vi: "chanh", en: "lemon" },
+      { emoji: "🍍", vi: "dứa", en: "pineapple" }
+    ],
+    purple: [
+      { emoji: "🍇", vi: "nho", en: "grape" },
+      { emoji: "🫐", vi: "việt quất", en: "blueberry" }
+    ],
+    white: [
+      { emoji: "🥥", vi: "dừa", en: "coconut" },
+      { emoji: "🧄", vi: "tỏi", en: "garlic" }
+    ]
+  };
+
+  const FRUIT_COLORS = Object.keys(FRUIT_POOLS);
+
+  function pickRandom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function shuffleArray(arr) {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  }
+
+  /**
+   * Builds one randomized fruit group with exactly one odd-colored fruit.
+   * `buttons` limits the colors that can appear, guaranteeing the odd color is
+   * pressable. The odd fruit is placed at a random position.
+   */
+  function buildFruitSet({
+    buttons = null,
+    ruleId = null,
+    size = null,
+    majorityColor = null,
+    oddColor = null
+  } = {}) {
+    const allowedColors = FRUIT_COLORS.filter(
+      (color) => !buttons || buttons.includes(color)
+    );
+    const usableColors = allowedColors.length >= 2 ? allowedColors : FRUIT_COLORS;
+
+    const resolvedMajority =
+      majorityColor && usableColors.includes(majorityColor)
+        ? majorityColor
+        : pickRandom(usableColors);
+    const oddCandidates = usableColors.filter((c) => c !== resolvedMajority);
+    const resolvedOdd =
+      oddColor && oddCandidates.includes(oddColor)
+        ? oddColor
+        : pickRandom(oddCandidates.length > 0 ? oddCandidates : usableColors);
+
+    const total = size || (3 + Math.floor(Math.random() * 2));
+    const majorityCount = Math.max(1, total - 1);
+    const majorityPool = FRUIT_POOLS[resolvedMajority] || FRUIT_POOLS.red;
+    const oddPool = FRUIT_POOLS[resolvedOdd] || FRUIT_POOLS.yellow;
+
+    const fruits = [];
+    for (let i = 0; i < majorityCount; i++) {
+      const fruit = majorityPool[i % majorityPool.length];
+      fruits.push({
+        emoji: fruit.emoji,
+        vi: fruit.vi,
+        en: fruit.en,
+        color: resolvedMajority,
+        isOdd: false
+      });
+    }
+
+    const oddFruit = pickRandom(oddPool);
+    fruits.push({
+      emoji: oddFruit.emoji,
+      vi: oddFruit.vi,
+      en: oddFruit.en,
+      color: resolvedOdd,
+      isOdd: true
+    });
+
+    return {
+      ruleId,
+      majorityColor: resolvedMajority,
+      oddColor: resolvedOdd,
+      fruits: shuffleArray(fruits)
+    };
+  }
 
   /**
    * Factory for one stimulus rule.
@@ -281,43 +384,48 @@
   }
 
   /**
-   * Factory for the Color Rule Transfer Rule (Round 20+):
-   * Transfers RULE-DERIVED colors from `oldColor` to `newColor`. The old button stays pressable.
-   * Explicit prompt colors (direct counts, sequences, memory, Stroop, lit-button questions)
-   * keep their original colors because they are not rule colors.
+   * Factory for the Odd-Fruit Rule:
+   * "Nhấn màu của loại quả CÓ MÀU KHÁC BIỆT với các quả còn lại."
+   * Each rule instance is tied to one fruit family via `fruitSet.ruleId`.
    */
-  function createColorLockTransferRule(
-    oldColor = "red",
-    newColor = "purple",
-    id = "rule_lock_transfer_1",
-    group = "color_lock_1",
-    priority = 90
-  ) {
-    const viOld = COLOR_NAMES.vi[oldColor];
-    const viNew = COLOR_NAMES.vi[newColor];
-    const enOld = COLOR_NAMES.en[oldColor];
-    const enNew = COLOR_NAMES.en[newColor];
+  function createFruitOddRule({
+    id = "rule_fruit_odd_1",
+    group = "stimulus_fruit_1",
+    pressCount = 1,
+    exampleSet = null
+  } = {}) {
+    const count = pressCount === 2 ? 2 : 1;
+    const example = exampleSet || buildFruitSet({ ruleId: id, size: 4 });
+    const exampleEmojis = example.fruits.map((fruit) => fruit.emoji).join(" ");
+    const oddFruit = example.fruits.find((fruit) => fruit.isOdd) || example.fruits[0];
+    const viOdd = COLOR_NAMES.vi[example.oddColor] || "VÀNG";
+    const enOdd = COLOR_NAMES.en[example.oddColor] || "YELLOW";
 
     return {
       id,
       group,
-      priority,
-      icon: "🔒",
-      oldColor,
-      newColor,
+      priority: 60,
+      icon: "🍎",
+      pressCount: count,
       description: {
-        vi: `Luật của nút ${viOld} chuyển sang nút ${viNew}. Nút ${viOld} vẫn bấm được. Các LUẬT dùng màu ${viOld} giờ dùng màu ${viNew}; câu hỏi ghi rõ màu ${viOld} và câu thứ tự giữ nguyên màu ${viOld}.`,
-        en: `Rules for ${enOld} move to ${enNew}. ${enOld} stays pressable. RULES that use ${enOld} now use ${enNew}; questions that explicitly state ${enOld} and sequence instructions keep ${enOld}.`
+        vi: `Khi thấy một nhóm quả, nhấn màu của loại quả CÓ MÀU KHÁC BIỆT với các quả còn lại! Ví dụ: ${exampleEmojis} → quả ${oddFruit.vi} màu ${viOdd} → nhấn ${viOdd}${count > 1 ? ` ${count} lần` : " 1 lần"}.`,
+        en: `When you see a group of fruits, press the color of the fruit whose color is DIFFERENT from the rest! Example: ${exampleEmojis} → ${oddFruit.en} is ${enOdd} → press ${enOdd}${count > 1 ? ` ${count} times` : " 1 time"}.`
       },
-      apply(plan) {
-        const moved = plan.remapRuleColor(oldColor, newColor);
-        if (moved > 0) {
-          plan.addTrace({
-            ruleId: this.id,
-            vi: `Luật Chuyển Màu 🔒: Các luật dùng màu ${viOld} giờ dùng màu ${viNew}; nút ${viOld} vẫn bấm được.`,
-            en: `Color Transfer Rule 🔒: Rules using ${enOld} now use ${enNew}; ${enOld} stays pressable.`
-          });
-        }
+      apply(plan, context) {
+        const fruitSet = context.fruitSet;
+        if (!fruitSet || fruitSet.ruleId !== this.id) return;
+        plan.onlySingleColorCount(fruitSet.oddColor, count);
+        const viOddColor = COLOR_NAMES.vi[fruitSet.oddColor] || fruitSet.oddColor;
+        const enOddColor = COLOR_NAMES.en[fruitSet.oddColor] || fruitSet.oddColor;
+        const viOddFruit =
+          (fruitSet.fruits.find((fruit) => fruit.isOdd) || {}).vi || "quả";
+        const enOddFruit =
+          (fruitSet.fruits.find((fruit) => fruit.isOdd) || {}).en || "fruit";
+        plan.addTrace({
+          ruleId: this.id,
+          vi: `Luật Quả 🍎: ${viOddFruit} có màu ${viOddColor} khác với các quả còn lại → Nhấn ${viOddColor} ${count} lần.`,
+          en: `Fruit Rule 🍎: ${enOddFruit} is ${enOddColor}, different from the rest → Press ${enOddColor} ${count} time(s).`
+        });
       }
     };
   }
@@ -328,8 +436,6 @@
     rule_bomb_yellow_first: createBombRule("yellow", "black", "rule_bomb_yellow_first"),
     rule_parity_white_blue: createParityRule("white", "blue", true, "rule_parity_white_blue"),
     rule_finale_purple_last: createFinaleRule("purple", "rule_finale_purple_last"),
-    rule_lock_transfer_1: createColorLockTransferRule("red", "purple", "rule_lock_transfer_1", "color_lock_1", 90),
-    rule_lock_transfer_2: createColorLockTransferRule("blue", "white", "rule_lock_transfer_2", "color_lock_2", 91),
     rule_lion_zero: createLionZeroRule(),
     rule_fake_1: createFakeRule("rule_fake_1", "bolt_add"),
     rule_fake_2: createFakeRule("rule_fake_2", "moon_zero")
@@ -636,7 +742,8 @@
         baseSpec: roundData.baseSpec,
         stimuli: roundData.stimuli || [],
         availableButtons: roundData.buttons || ["red"],
-        litButton: roundData.litButton || null
+        litButton: roundData.litButton || null,
+        fruitSet: roundData.fruitSet || null
       };
 
       const activeRules = this.getActiveRules();
@@ -658,8 +765,10 @@
     createParityRule,
     createBombRule,
     createFinaleRule,
-    createColorLockTransferRule,
+    createFruitOddRule,
     createFakeRule,
+    buildFruitSet,
+    FRUIT_COLORS,
     FAKE_RULE_VARIANTS: Object.keys(FAKE_RULE_VARIANTS)
   };
   global.PressGame.RuleFactories = RULE_FACTORIES;

@@ -11,8 +11,9 @@
  *   everyday knowledge questions, and the Lion Rule.
  * - Rounds 15–60: 1–2 questions ask the player to repeat the exact buttons pressed
  *   in the previous round (same color, count, and order).
- * - Rounds 20–60 (6 Buttons + Color Rule Transfer): base 9s, all 6 buttons stay pressable,
- *   while answer targets for one color transfer to another color.
+ * - Rounds 20+ (6 Buttons): two Odd-Fruit rules are introduced at random rounds in R20–34
+ *   and their fruit groups appear at random later rounds.
+ * - Extra question kinds: color mixing, longest color name, and vowel counting.
  * - Dog/cat/mouse rules and appearances are spread through R4–39.
  * - Each run randomly assigns one of dog/cat/mouse/lion to zero, 1–2 others to additive,
  *   and the rest to exclusive.
@@ -180,6 +181,84 @@
     white: "WHITE",
     purple: "PURPLE"
   };
+
+  const FRUIT_INTRO_MIN_ROUND = 20;
+  const FRUIT_INTRO_MAX_ROUND = 34;
+  const FRUIT_INTRO_MIN_GAP = 3;
+  const FRUIT_APPEARANCES_PER_RULE = 2;
+  const FRUIT_APPEARANCE_GAP_MIN = 1;
+  const FRUIT_APPEARANCE_GAP_MAX = 6;
+
+  const MIX_RECIPES = [
+    { a: "red", b: "blue", result: "purple" }
+  ];
+
+  const MIX_VERBS_VI = ["pha với", "trộn với", "kết hợp với"];
+  const MIX_VERBS_EN = ["mixed with", "blended with", "combined with"];
+
+  const VOWEL_WORDS = {
+    vi: [
+      "ÁP LỰC",
+      "THỜI GIAN",
+      "CHIẾN THẮNG",
+      "BÌNH TĨNH",
+      "TẬP TRUNG",
+      "NĂNG LƯỢNG",
+      "KIÊN NHẪN",
+      "TỐC ĐỘ",
+      "MÀU SẮC",
+      "CẢM XÚC",
+      "QUYẾT TÂM",
+      "SÁNG TẠO",
+      "ĐỒNG ĐỘI",
+      "TỰ TIN"
+    ],
+    en: [
+      "PRESSURE",
+      "FOCUS",
+      "COLOR",
+      "SIGNAL",
+      "BUTTON",
+      "VICTORY",
+      "CHALLENGE",
+      "MOMENTUM",
+      "ACCURACY",
+      "PATIENCE",
+      "BALANCE",
+      "TARGET",
+      "TIMING"
+    ]
+  };
+
+  function stripDiacritics(text) {
+    return String(text)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d")
+      .replace(/Đ/g, "D");
+  }
+
+  function countVowels(word, lang) {
+    const normalized = stripDiacritics(String(word)).toLowerCase();
+    const vowelSet = lang === "en" ? "aeiou" : "aeiouy";
+    let count = 0;
+    for (const char of normalized) {
+      if (vowelSet.includes(char)) count++;
+    }
+    return count;
+  }
+
+  function getColorNames(lang) {
+    return lang === "en" ? COLOR_EN : COLOR_VI;
+  }
+
+  function getColorLengths(buttons, lang) {
+    const names = getColorNames(lang);
+    return buttons.map((color) => ({
+      color,
+      length: (names[color] || color).length
+    }));
+  }
 
   function randInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -538,18 +617,164 @@
     stimuli = [],
     activeAnimal = null,
     animalColor = "red",
-    effectiveAnimalColor = "red",
     prevLitButton = null,
-    memoryInfo = null
+    memoryInfo = null,
+    lang = "vi",
+    fruitInfo = null
   }) {
     const hasAnimal = Boolean(activeAnimal && stimuli.includes(activeAnimal));
     const hasBomb = stimuli.includes("bomb");
 
     const selectableColors = buttons.filter((c) => {
-      if (hasAnimal && (c === animalColor || c === effectiveAnimalColor)) return false;
+      if (hasAnimal && c === animalColor) return false;
       if (hasBomb && (c === "black" || c === "yellow")) return false;
       return true;
     });
+
+    // Fruit odd-one-out round: the answer is resolved by the fruit rule.
+    if (kind === "fruit_odd" && fruitInfo && fruitInfo.fruitSet) {
+      const fruitSet = fruitInfo.fruitSet;
+      const fruitRow = fruitSet.fruits
+        .map((fruit) => `<span class="fruit-emoji">${fruit.emoji}</span>`)
+        .join("");
+      return {
+        stimuli: [...stimuli],
+        fruitSet,
+        prompt: {
+          vi: "Nhấn màu của loại quả CÓ MÀU KHÁC BIỆT với các quả còn lại!",
+          en: "Press the color of the fruit that is DIFFERENT from the rest!"
+        },
+        promptHtml: {
+          vi: `<span class="fruit-row">${fruitRow}</span><br>Nhấn màu của loại quả CÓ MÀU KHÁC BIỆT với các quả còn lại!`,
+          en: `<span class="fruit-row">${fruitRow}</span><br>Press the color of the fruit that is DIFFERENT from the rest!`
+        },
+        baseSpec: {
+          type: "direct_counts",
+          counts: {}
+        }
+      };
+    }
+
+    // Color-mixing question: only combinations whose result is a real button.
+    if (kind === "color_mix") {
+      const recipe = MIX_RECIPES.find(
+        (item) =>
+          buttons.includes(item.a) &&
+          buttons.includes(item.b) &&
+          buttons.includes(item.result)
+      );
+      if (recipe) {
+        const flip = Math.random() < 0.5;
+        const first = flip ? recipe.b : recipe.a;
+        const second = flip ? recipe.a : recipe.b;
+        const result = recipe.result;
+        const count = 1;
+        const verbVi = pickOne(MIX_VERBS_VI);
+        const verbEn = pickOne(MIX_VERBS_EN);
+        return {
+          stimuli: [...stimuli],
+          colorMix: { first, second, result, count },
+          prompt: {
+            vi: `${COLOR_VI[first]} ${verbVi} ${COLOR_VI[second]} ra màu gì? Nhấn màu đó ${count} lần!`,
+            en: `What color does ${COLOR_EN[first]} ${verbEn} ${COLOR_EN[second]} make? Press that color ${count} time!`
+          },
+          baseSpec: {
+            type: "direct_counts",
+            counts: { [result]: count },
+            explanation: {
+              vi: `Cơ bản: ${COLOR_VI[first]} ${verbVi} ${COLOR_VI[second]} ra màu ${COLOR_VI[result]} → Nhấn ${COLOR_VI[result]} ${count} lần.`,
+              en: `Base: ${COLOR_EN[first]} ${verbEn} ${COLOR_EN[second]} makes ${COLOR_EN[result]} → Press ${COLOR_EN[result]} ${count} time.`
+            }
+          }
+        };
+      }
+    }
+
+    // Longest color-name question, computed from the buttons of this round.
+    if (kind === "longest_color_name") {
+      const lengths = getColorLengths(buttons, lang);
+      const maxLength = Math.max(...lengths.map((item) => item.length));
+      const longestColors = lengths
+        .filter((item) => item.length === maxLength)
+        .map((item) => item.color);
+      const names = getColorNames(lang);
+      if (longestColors.length === 1) {
+        const targetColor = longestColors[0];
+        const targetName = names[targetColor];
+        return {
+          stimuli: [...stimuli],
+          longestColorNames: { lang, maxLength, colors: longestColors },
+          prompt: {
+            vi: "Nhấn nút có tên màu DÀI NHẤT (nhiều ký tự nhất)!",
+            en: "Press the button whose color name is the LONGEST (most characters)!"
+          },
+          baseSpec: {
+            type: "direct_counts",
+            counts: { [targetColor]: 1 },
+            explanation: {
+              vi: `Cơ bản: Tên màu dài nhất là ${targetName} (${maxLength} ký tự) → Nhấn ${targetName} 1 lần.`,
+              en: `Base: The longest color name is ${targetName} (${maxLength} characters) → Press ${targetName} 1 time.`
+            }
+          }
+        };
+      }
+
+      const viNames = longestColors.map((color) => COLOR_VI[color]).join(", ");
+      const enNames = longestColors.map((color) => COLOR_EN[color]).join(", ");
+      const counts = {};
+      for (const color of longestColors) counts[color] = 1;
+      return {
+        stimuli: [...stimuli],
+        longestColorNames: { lang, maxLength, colors: longestColors },
+        prompt: {
+          vi: `Nhấn TẤT CẢ các nút có tên màu DÀI NHẤT (${viNames}), mỗi nút 1 lần!`,
+          en: `Press ALL buttons with the LONGEST color name (${enNames}), 1 time each!`
+        },
+        baseSpec: {
+          type: "direct_counts",
+          counts,
+          explanation: {
+            vi: `Cơ bản: Các màu dài nhất (${maxLength} ký tự) là ${viNames} → Nhấn mỗi nút 1 lần.`,
+            en: `Base: The longest color names (${maxLength} characters) are ${enNames} → Press each button 1 time.`
+          }
+        }
+      };
+    }
+
+    // Vowel-count question: the answer is the number of vowels in a word.
+    if (kind === "vowel_count") {
+      const wordPool = VOWEL_WORDS[lang] || VOWEL_WORDS.vi;
+      const candidates = wordPool
+        .map((word) => ({ word, count: countVowels(word, lang) }))
+        .filter((item) => item.count > 0 && item.count <= 6);
+      if (candidates.length > 0) {
+        const picked = pickOne(candidates);
+        const targetColor =
+          selectableColors.length > 0 ? pickOne(selectableColors) : pickOne(buttons);
+        const viTarget = COLOR_VI[targetColor];
+        const enTarget = COLOR_EN[targetColor];
+        return {
+          stimuli: [...stimuli],
+          vowelQuestion: {
+            word: picked.word,
+            count: picked.count,
+            targetColor
+          },
+          prompt: {
+            vi: `Từ "${picked.word}" có bao nhiêu nguyên âm? Nhấn ${viTarget} bấy nhiêu lần!`,
+            en: `How many vowels are in "${picked.word}"? Press ${enTarget} that many times!`
+          },
+          baseSpec: {
+            type: "direct_counts",
+            counts: { [targetColor]: picked.count },
+            explanation: {
+              vi: `Cơ bản: "${picked.word}" có ${picked.count} nguyên âm → Nhấn ${viTarget} ${picked.count} lần.`,
+              en: `Base: "${picked.word}" has ${picked.count} vowels → Press ${enTarget} ${picked.count} times.`
+            }
+          }
+        };
+      }
+    }
 
     // 0. Repeat the exact presses from the previous round (resolved at runtime).
     if (kind === "repeat_previous_presses") {
@@ -1118,7 +1343,7 @@
   /**
    * Generates a fresh 60-round campaign AND dynamic rules for this run.
    */
-  function generateGameLevels() {
+  function generateGameLevels(lang = "vi") {
     const levels = [];
     const customCatalog = {};
 
@@ -1137,27 +1362,6 @@
       "rule_bomb_yellow_first"
     );
 
-    // Round 20+: Color rule transfer from old color -> new color.
-    // The old buttons stay pressable; only RULE-derived colors are remapped.
-    const [lockedColor1, lockedColor2] = shuffle(["red", "blue"]);
-    const newColor1 = "purple";
-    const newColor2 = "white";
-    customCatalog.rule_lock_transfer_1 = RuleFactories.createColorLockTransferRule(
-      lockedColor1,
-      newColor1,
-      "rule_lock_transfer_1",
-      "color_lock_1",
-      90
-    );
-
-    customCatalog.rule_lock_transfer_2 = RuleFactories.createColorLockTransferRule(
-      lockedColor2,
-      newColor2,
-      "rule_lock_transfer_2",
-      "color_lock_2",
-      91
-    );
-
     // 2. Schedule Memory Set & Recall (5 or 6 rounds apart!)
     // Memory 1: Set in Round 6 or 7 -> Recalled 5 or 6 rounds later (Round 11, 12, or 13)
     const mem1SetRound = pickOne([6, 7]);
@@ -1166,7 +1370,7 @@
 
     // Memory 2: Set in Round 13 or 14 (avoiding mem1RecallRound) -> Recalled 5 or 6 rounds later (Round 18, 19)
     const mem2SetRound = mem1RecallRound === 13 ? 14 : 13;
-    const mem2RecallRound = mem2SetRound + pickOne([5, 6]); // 18, 19, or 20 -> clamp to 19 so R20 can showcase color transfer
+    const mem2RecallRound = mem2SetRound + pickOne([5, 6]); // 18, 19, or 20 -> clamp to 19
     const finalMem2RecallRound = Math.min(19, mem2RecallRound);
     const mem2IsNumber = !mem1IsNumber; // Ensure player experiences BOTH number memory and color memory!
 
@@ -1211,19 +1415,127 @@
       (r) => !lionExcluded.has(r)
     );
     const lionRound = lionCandidates.length > 0 ? pickOne(lionCandidates) : 17;
+    const lionSightingRound = randInt(LION_SIGHTING_MIN, LION_SIGHTING_MAX);
 
-    // 5. Build a randomized, non-clustered animal schedule.
-    // Each rule is introduced first; its animal appears a random number of rounds later.
-    const animalBlockedRounds = new Set([
-      5,
+    // 5. Odd-Fruit rules: random intro rounds (not fixed R20/R23) and random appearances.
+    const fruitIntroBlocked = new Set([
       ...bombRounds,
-      20,
-      23,
       lionRound,
+      lionSightingRound,
       mem1SetRound,
       mem1RecallRound,
       mem2SetRound,
       finalMem2RecallRound
+    ]);
+
+    const fruitIntroCandidates = [];
+    for (let r = FRUIT_INTRO_MIN_ROUND; r <= FRUIT_INTRO_MAX_ROUND; r++) {
+      if (!fruitIntroBlocked.has(r)) fruitIntroCandidates.push(r);
+    }
+
+    let fruitIntroRounds = [];
+    if (fruitIntroCandidates.length >= 2) {
+      for (const candidate of shuffle(fruitIntroCandidates)) {
+        if (fruitIntroRounds.length === 0) {
+          fruitIntroRounds.push(candidate);
+        } else if (
+          fruitIntroRounds.every(
+            (chosen) => Math.abs(chosen - candidate) >= FRUIT_INTRO_MIN_GAP
+          )
+        ) {
+          fruitIntroRounds.push(candidate);
+        }
+        if (fruitIntroRounds.length === 2) break;
+      }
+    }
+    if (fruitIntroRounds.length < 2) {
+      fruitIntroRounds = [
+        FRUIT_INTRO_MIN_ROUND,
+        FRUIT_INTRO_MIN_ROUND + FRUIT_INTRO_MIN_GAP
+      ];
+    }
+    fruitIntroRounds.sort((a, b) => a - b);
+
+    const fruitRuleDefs = [
+      { id: "rule_fruit_odd_1", group: "stimulus_fruit_1", pressCount: 1 },
+      { id: "rule_fruit_odd_2", group: "stimulus_fruit_2", pressCount: 2 }
+    ];
+
+    const fruitRulesInfo = fruitRuleDefs.map((def, idx) => {
+      const introRound = fruitIntroRounds[idx];
+      const introButtons = getBaseButtonsForRound(introRound);
+      customCatalog[def.id] = RuleFactories.createFruitOddRule({
+        ...def,
+        exampleSet: RuleFactories.buildFruitSet({
+          buttons: introButtons,
+          ruleId: def.id,
+          size: 4
+        })
+      });
+      return { ...def, introRound, appearanceRounds: [] };
+    });
+
+    const fruitAppearanceByRound = {};
+    const usedFruitAppearanceRounds = new Set(fruitIntroRounds);
+
+    fruitRulesInfo.forEach((info) => {
+      let attempts = 0;
+      while (
+        info.appearanceRounds.length < FRUIT_APPEARANCES_PER_RULE &&
+        attempts < 300
+      ) {
+        attempts++;
+        const minRound = info.introRound + FRUIT_APPEARANCE_GAP_MIN;
+        const maxRound = Math.min(
+          TOTAL_ROUNDS,
+          info.introRound + FRUIT_APPEARANCE_GAP_MAX + 6
+        );
+        if (minRound > TOTAL_ROUNDS) break;
+        const candidate = randInt(minRound, maxRound);
+        if (fruitIntroBlocked.has(candidate)) continue;
+        if (usedFruitAppearanceRounds.has(candidate)) continue;
+        if (
+          info.appearanceRounds.some(
+            (chosen) => Math.abs(chosen - candidate) < 2
+          )
+        ) {
+          continue;
+        }
+        usedFruitAppearanceRounds.add(candidate);
+        info.appearanceRounds.push(candidate);
+      }
+
+      if (info.appearanceRounds.length === 0) {
+        for (let r = info.introRound + 2; r <= TOTAL_ROUNDS; r++) {
+          if (fruitIntroBlocked.has(r) || usedFruitAppearanceRounds.has(r)) continue;
+          usedFruitAppearanceRounds.add(r);
+          info.appearanceRounds.push(r);
+          break;
+        }
+      }
+
+      info.appearanceRounds.forEach((r) => {
+        const fruitSet = RuleFactories.buildFruitSet({
+          buttons: getBaseButtonsForRound(r),
+          ruleId: info.id
+        });
+        fruitAppearanceByRound[r] = { ...info, fruitSet };
+      });
+    });
+
+    // 6. Build a randomized, non-clustered animal schedule.
+    // Each rule is introduced first; its animal appears a random number of rounds later.
+    const animalBlockedRounds = new Set([
+      5,
+      ...bombRounds,
+      lionRound,
+      lionSightingRound,
+      mem1SetRound,
+      mem1RecallRound,
+      mem2SetRound,
+      finalMem2RecallRound,
+      ...fruitIntroRounds,
+      ...Object.keys(fruitAppearanceByRound).map(Number)
     ]);
 
     let animalSchedule = buildAnimalSchedule(animalBlockedRounds);
@@ -1291,7 +1603,6 @@
       );
     });
 
-    const lionSightingRound = randInt(LION_SIGHTING_MIN, LION_SIGHTING_MAX);
     const lionMode = getStimulusMode("lion");
     const lionRuleId =
       lionMode === "zero" ? "rule_lion_zero" : "rule_lion_press";
@@ -1324,18 +1635,22 @@
       mode: lionMode
     };
 
-    // 6. Lock in all reserved rule/memory rounds, then fill free rounds with required mechanics.
+    // 7. Lock in all reserved rule/memory rounds, then fill free rounds with required mechanics.
     const kindsByRound = {
       [PARITY_RULE_INTRO_ROUND]: "parity_math",
       11: "parity_math",
-      20: "stroop_majority_count",
-      23: "stroop_majority_count",
       [lionSightingRound]: "direct_color",
       [mem1SetRound]: "memory_set",
       [mem1RecallRound]: "memory_recall",
       [mem2SetRound]: "memory_set",
       [finalMem2RecallRound]: "memory_recall"
     };
+    fruitIntroRounds.forEach((r) => {
+      kindsByRound[r] = "direct_color";
+    });
+    Object.keys(fruitAppearanceByRound).forEach((r) => {
+      kindsByRound[Number(r)] = "fruit_odd";
+    });
     animalAppearanceRoundSet.forEach((r) => {
       kindsByRound[r] = "animal_appearance";
     });
@@ -1351,12 +1666,15 @@
       kind === "sequence_forward" || kind === "sequence_reverse";
     const isWhenLitKind = (kind) => kind === "when_lit_press";
     const isStroopMajorityKind = (kind) => kind === "stroop_majority_count";
+    const isColorMixKind = (kind) => kind === "color_mix";
     const canUseNumericResultAtRound = (round) =>
       round >= PARITY_RULE_INTRO_ROUND;
     const canUseSequenceAtRound = (round) => !bombRounds.has(round);
     const canUseWhenLitAtRound = (round) => !bombRounds.has(round);
     const canUseStroopMajorityAtRound = (round) =>
       round >= 20 && !bombRounds.has(round);
+    const canUseColorMixAtRound = (round) =>
+      round >= 20 && getBaseButtonsForRound(round).includes("purple");
 
     const assignedFreeRounds = new Set();
     const prevLitCandidates = freeRounds.filter((r) => r >= 6);
@@ -1419,7 +1737,10 @@
       "parity_math",
       "stroop_color",
       "stroop_majority_count",
-      "trivia"
+      "trivia",
+      "color_mix",
+      "longest_color_name",
+      "vowel_count"
     ]);
     let extraIdx = 0;
     freeRounds.forEach((r) => {
@@ -1438,6 +1759,9 @@
       if (isStroopMajorityKind(kind) && !canUseStroopMajorityAtRound(r)) {
         kind = "direct_color";
       }
+      if (isColorMixKind(kind) && !canUseColorMixAtRound(r)) {
+        kind = "direct_color";
+      }
       kindsByRound[r] = kind;
     });
 
@@ -1453,9 +1777,7 @@
       !bombRounds.has(r) &&
       !repeatRoundSet.has(r) &&
       r !== lionRound &&
-      !animalRuleIntroByRound[r] &&
-      r !== 20 &&
-      r !== 23;
+      !animalRuleIntroByRound[r];
     const fakeRuleRounds = {};
     const usedFakeRounds = new Set();
     fakeRuleBands.forEach((band) => {
@@ -1485,26 +1807,17 @@
       const buttons = r >= 11 ? shuffleButtonsDifferent(baseButtons, prevButtons) : [...baseButtons];
       prevButtons = buttons;
 
-      // Active color rule transfers for this round (Round 20+).
-      // These remap answer targets; they never disable buttons.
-      const lockMap = {};
-      if (r >= 20) {
-        lockMap[lockedColor1] = newColor1;
-      }
-      if (r >= 23) {
-        lockMap[lockedColor2] = newColor2;
-      }
-
       // New rule introduced on this round (7s "LUẬT MỚI" screen)
       const introInfo = animalRuleIntroByRound[r] || null;
       const appearanceInfo = animalAppearanceByRound[r] || null;
+      const fruitInfo = fruitAppearanceByRound[r] || null;
       let newRuleId = null;
       if (introInfo) newRuleId = introInfo.ruleId;
       else if (r === PARITY_RULE_INTRO_ROUND) newRuleId = "rule_parity_blue_red";
       else if (r === 11) newRuleId = "rule_bomb_yellow_first";
       else if (r === lionRound) newRuleId = lionInfo.ruleId;
-      else if (r === 20) newRuleId = "rule_lock_transfer_1";
-      else if (r === 23) newRuleId = "rule_lock_transfer_2";
+      else if (fruitRulesInfo[0].introRound === r) newRuleId = fruitRulesInfo[0].id;
+      else if (fruitRulesInfo[1].introRound === r) newRuleId = fruitRulesInfo[1].id;
       else if (fakeRuleRounds[r]) newRuleId = fakeRuleRounds[r];
 
       let kind = appearanceInfo ? "direct_color" : kindsByRound[r];
@@ -1542,9 +1855,6 @@
         : isLionSighting
           ? lionTargetColor
           : "red";
-      const effectiveAnimalColor = activeAnimal
-        ? lockMap[animalColor] || animalColor
-        : "red";
 
       const task = buildMultiColorTask({
         round: r,
@@ -1553,9 +1863,10 @@
         stimuli,
         activeAnimal,
         animalColor,
-        effectiveAnimalColor,
         prevLitButton,
-        memoryInfo
+        memoryInfo,
+        lang,
+        fruitInfo
       });
 
       // Choose which button lights up (`litButton`) on this round
@@ -1584,7 +1895,11 @@
         triviaValue: task.triviaValue !== undefined ? task.triviaValue : null,
         difficultyProgress: getDifficultyProgress(r),
         litCondition: task.litCondition || null,
-        stroopMajority: task.stroopMajority || null
+        stroopMajority: task.stroopMajority || null,
+        fruitSet: task.fruitSet || null,
+        colorMix: task.colorMix || null,
+        longestColorNames: task.longestColorNames || null,
+        vowelQuestion: task.vowelQuestion || null
       });
     }
 

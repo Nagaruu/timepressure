@@ -145,7 +145,7 @@
     if (REAL_ANIMAL_IMAGES[stimKey]) {
       return `
         <div class="stim-photo-frame">
-          <img class="stim-photo-img" src="${REAL_ANIMAL_IMAGES[stimKey]}" alt="${stimKey}" />
+          <img class="stim-photo-img" src="${REAL_ANIMAL_IMAGES[stimKey]}" alt="${stimKey}" decoding="async" />
         </div>
       `;
     }
@@ -176,7 +176,20 @@
       this.renderedPressCount = 0;
       this.perimeterStrokeEl = null;
       this.trayEl = null;
+      this.screenEl = null;
+      this.buttonGridEl = null;
+      this.buttonArenaEl = null;
+      this.promptTextEl = null;
+      this.roundPillTextEl = null;
+      this.stimuliRowEl = null;
       this._currentUrgency = null;
+
+      if (typeof Image !== "undefined") {
+        Object.values(REAL_ANIMAL_IMAGES).forEach((src) => {
+          const img = new Image();
+          img.src = src;
+        });
+      }
       this.helpOpen = false;
       this.theme = this._getInitialTheme();
       this._applyTheme(this.theme);
@@ -654,52 +667,18 @@
       return `<span class="pressed-btn-graphic pressed-color-${color}" title="${color}"><span class="pressed-btn-socket"></span><span class="pressed-btn-cap"><span class="pressed-btn-shine"></span></span></span>`;
     }
 
-    _renderPlayingScreen(state, lang) {
-      const roundData = state.currentRound;
-      const buttons = roundData.buttons || ["red"];
-      const pressHistory = state.pressHistory || [];
+    _buildStimuliHtml(roundData) {
+      if (!roundData.stimuli || roundData.stimuli.length === 0) return "";
+      return roundData.stimuli
+        .map(
+          (stimKey) =>
+            `<div class="pure-stimulus-icon" data-stimulus="${stimKey}">${renderStimulusVisual(stimKey)}</div>`
+        )
+        .join("");
+    }
 
-      // Fast-path incremental DOM update during the same playing round (O(1) per button press!)
-      if (
-        this.lastScreen === "playing" &&
-        this.lastRoundIndex === state.roundIndex &&
-        this.screenEl
-      ) {
-        if (this.trayEl && this.renderedPressCount < pressHistory.length) {
-          let newIconsHtml = "";
-          for (let i = this.renderedPressCount; i < pressHistory.length; i++) {
-            newIconsHtml += this._buildSinglePressedIconHtml(pressHistory[i].color);
-          }
-          this.trayEl.insertAdjacentHTML("beforeend", newIconsHtml);
-          this.renderedPressCount = pressHistory.length;
-        }
-
-        if (state.roundClearedWait && !this.screenEl.classList.contains("round-cleared-pulse")) {
-          this.screenEl.classList.add("round-cleared-pulse");
-          if (this.perimeterStrokeEl) {
-            this._currentUrgency = "cleared";
-            this.perimeterStrokeEl.setAttribute("data-urgency", "cleared");
-            this.perimeterStrokeEl.style.strokeDashoffset = "0";
-          }
-        }
-        return;
-      }
-
-      // Modern Vector SVG Stimuli (Dog, Bomb, Stars, Diamonds, Fire — no raw text/emoji)
-      let stimuliHtml = "";
-      if (roundData.stimuli && roundData.stimuli.length > 0) {
-        const icons = roundData.stimuli
-          .map((stimKey) => {
-            const svgMarkup = renderStimulusVisual(stimKey);
-            return `<div class="pure-stimulus-icon" data-stimulus="${stimKey}">${svgMarkup}</div>`;
-          })
-          .join("");
-        stimuliHtml = `<div class="stimuli-row">${icons}</div>`;
-      }
-
-      // Equal-Sized 3D Glossy Dome Buttons with Concentric Tech Rings (matching Start screen style)
-      const litButton = roundData.litButton || null;
-      const buttonsHtml = buttons
+    _buildButtonsHtml(buttons, litButton) {
+      return buttons
         .map((color) => {
           const isLit = litButton === color;
           return `
@@ -723,7 +702,116 @@
           `;
         })
         .join("");
+    }
 
+    _bindButtonGridEvents() {
+      if (!this.buttonGridEl) return;
+      this.buttonGridEl.addEventListener("pointerdown", (e) => {
+        const btn = e.target.closest ? e.target.closest(".game-btn") : null;
+        if (!btn || !this.buttonGridEl.contains(btn)) return;
+        if (e.button !== undefined && e.button !== 0) return;
+        btn._lastPointerDownTs = performance.now();
+        this._showPressedButtonImage(btn);
+        this.controller.handleButtonPress(btn.getAttribute("data-color"));
+      });
+
+      this.buttonGridEl.addEventListener("click", (e) => {
+        const btn = e.target.closest ? e.target.closest(".game-btn") : null;
+        if (!btn || !this.buttonGridEl.contains(btn)) return;
+        const now = performance.now();
+        if (btn._lastPointerDownTs && now - btn._lastPointerDownTs < 350) {
+          return;
+        }
+        this._showPressedButtonImage(btn);
+        this.controller.handleButtonPress(btn.getAttribute("data-color"));
+      });
+    }
+
+    _updatePlayingScreen(state, lang) {
+      const roundData = state.currentRound;
+      const buttons = roundData.buttons || ["red"];
+      const pressHistory = state.pressHistory || [];
+
+      if (this.screenEl) this.screenEl.classList.remove("round-cleared-pulse");
+      if (this.roundPillTextEl) {
+        this.roundPillTextEl.textContent = t(lang, "roundOnlyLabel", {
+          round: roundData.round
+        });
+      }
+      if (this.promptTextEl) {
+        this.promptTextEl.innerHTML =
+          (roundData.promptHtml && roundData.promptHtml[lang]) || roundData.prompt[lang];
+      }
+
+      const stimuliHtml = this._buildStimuliHtml(roundData);
+      if (this.stimuliRowEl) {
+        this.stimuliRowEl.innerHTML = stimuliHtml;
+        this.stimuliRowEl.style.display = stimuliHtml ? "" : "none";
+      }
+
+      if (this.buttonArenaEl) {
+        this.buttonArenaEl.setAttribute("data-btn-count", buttons.length);
+      }
+      if (this.buttonGridEl) {
+        this.buttonGridEl.setAttribute("data-btn-count", buttons.length);
+        this.buttonGridEl.innerHTML = this._buildButtonsHtml(
+          buttons,
+          roundData.litButton || null
+        );
+      }
+      if (this.trayEl) {
+        this.trayEl.innerHTML = pressHistory
+          .map((item) => this._buildSinglePressedIconHtml(item.color))
+          .join("");
+      }
+      this.renderedPressCount = pressHistory.length;
+
+      if (this.perimeterStrokeEl) {
+        this.perimeterStrokeEl.setAttribute("data-urgency", "normal");
+        this.perimeterStrokeEl.style.strokeDashoffset = "0";
+      }
+      this._currentUrgency = "normal";
+    }
+
+    _renderPlayingScreen(state, lang) {
+      const roundData = state.currentRound;
+      const buttons = roundData.buttons || ["red"];
+      const pressHistory = state.pressHistory || [];
+
+      // Fast-path incremental DOM update during the same playing round (O(1) per button press!)
+      if (
+        this.lastScreen === "playing" &&
+        this.lastRoundIndex === state.roundIndex &&
+        this.screenEl &&
+        this.root.contains(this.screenEl)
+      ) {
+        if (this.trayEl && this.renderedPressCount < pressHistory.length) {
+          let newIconsHtml = "";
+          for (let i = this.renderedPressCount; i < pressHistory.length; i++) {
+            newIconsHtml += this._buildSinglePressedIconHtml(pressHistory[i].color);
+          }
+          this.trayEl.insertAdjacentHTML("beforeend", newIconsHtml);
+          this.renderedPressCount = pressHistory.length;
+        }
+
+        if (state.roundClearedWait && !this.screenEl.classList.contains("round-cleared-pulse")) {
+          this.screenEl.classList.add("round-cleared-pulse");
+          if (this.perimeterStrokeEl) {
+            this._currentUrgency = "cleared";
+            this.perimeterStrokeEl.setAttribute("data-urgency", "cleared");
+            this.perimeterStrokeEl.style.strokeDashoffset = "0";
+          }
+        }
+        return;
+      }
+
+      if (this.lastScreen === "playing" && this.screenEl && this.root.contains(this.screenEl)) {
+        this._updatePlayingScreen(state, lang);
+        return;
+      }
+
+      const stimuliHtml = this._buildStimuliHtml(roundData);
+      const buttonsHtml = this._buildButtonsHtml(buttons, roundData.litButton || null);
       const initialTrayHtml = pressHistory
         .map((item) => this._buildSinglePressedIconHtml(item.color))
         .join("");
@@ -739,20 +827,16 @@
               <span class="round-header-spacer" aria-hidden="true"></span>
               <div class="round-pill">
                 <span class="round-pill-dot"></span>
-                <span>${t(lang, "roundOnlyLabel", { round: roundData.round })}</span>
+                <span class="round-pill-text">${t(lang, "roundOnlyLabel", { round: roundData.round })}</span>
               </div>
-              ${
-                state.roundClearedWait
-                  ? '<span class="round-header-spacer" aria-hidden="true"></span>'
-                  : `<button type="button" class="circle-icon-btn home-corner-btn" data-action="return-home" aria-label="${t(lang, "homeBtn")}" title="${t(lang, "homeBtn")}">${HOME_ICON}</button>`
-              }
+              <button type="button" class="circle-icon-btn home-corner-btn" data-action="return-home" aria-label="${t(lang, "homeBtn")}" title="${t(lang, "homeBtn")}">${HOME_ICON}</button>
             </header>
 
             <main class="stage-area">
               <div class="minimal-prompt-box">
                 <span class="prompt-side-accent left"></span>
                 <div class="prompt-inner-content">
-                  ${stimuliHtml}
+                  <div class="stimuli-row" style="${stimuliHtml ? "" : "display: none;"}">${stimuliHtml}</div>
                   <p class="prompt-text">${(roundData.promptHtml && roundData.promptHtml[lang]) || roundData.prompt[lang]}</p>
                 </div>
                 <span class="prompt-side-accent right"></span>
@@ -773,28 +857,14 @@
       this.perimeterStrokeEl = this.root.querySelector("#perimeter-timer-stroke");
       this.screenEl = this.root.querySelector(".playing-screen");
       this.trayEl = this.root.querySelector("#pressed-history-tray");
+      this.buttonGridEl = this.root.querySelector(".button-grid");
+      this.buttonArenaEl = this.root.querySelector(".button-arena");
+      this.promptTextEl = this.root.querySelector(".prompt-text");
+      this.roundPillTextEl = this.root.querySelector(".round-pill-text");
+      this.stimuliRowEl = this.root.querySelector(".stimuli-row");
       this._currentUrgency = "normal";
 
-      // Reliable, zero-lag button press binding supporting both pointerdown and click fallback
-      this.root.querySelectorAll(".game-btn").forEach((btn) => {
-        const color = btn.getAttribute("data-color");
-
-        btn.addEventListener("pointerdown", (e) => {
-          if (e.button !== undefined && e.button !== 0) return;
-          btn._lastPointerDownTs = performance.now();
-          this._showPressedButtonImage(btn);
-          this.controller.handleButtonPress(color);
-        });
-
-        btn.addEventListener("click", () => {
-          const now = performance.now();
-          if (btn._lastPointerDownTs && now - btn._lastPointerDownTs < 350) {
-            return;
-          }
-          this._showPressedButtonImage(btn);
-          this.controller.handleButtonPress(color);
-        });
-      });
+      this._bindButtonGridEvents();
     }
 
     _renderSummaryScreen(state, lang) {

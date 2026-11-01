@@ -1,6 +1,6 @@
 /**
  * Automated verification suite for the 60-Round Randomized Campaign,
- * Cumulative Rule Engine (including Color Rule Transfer without disabled buttons) & AnswerValidator
+ * Cumulative Rule Engine (including the Odd-Fruit Rule) & AnswerValidator
  */
 const assert = require("assert");
 const { t } = require("../src/data/i18n.js");
@@ -59,6 +59,7 @@ function runTests() {
   );
 
   const firstRunPrompts = [];
+  const seenNewKinds = new Set();
   let differencesFound = 0;
   const animalDelays = new Set();
   const animalAppearanceGaps = new Set();
@@ -108,24 +109,89 @@ function runTests() {
         `Round ${i + 1} must not disable any button`
       );
     }
-    assert.strictEqual(
-      levels[19].newRuleId,
-      "rule_lock_transfer_1",
-      "Round 20 must introduce the first color transfer rule"
+    // Odd-Fruit rules replace the old color-transfer rules at random rounds.
+    const fruitIntroLevels = levels.filter(
+      (level) => level.newRuleId && level.newRuleId.startsWith("rule_fruit_odd_")
     );
     assert.strictEqual(
-      levels[22].newRuleId,
-      "rule_lock_transfer_2",
-      "Round 23 must introduce the second color transfer rule"
+      fruitIntroLevels.length,
+      2,
+      "Campaign must introduce 2 Odd-Fruit rules"
     );
+    for (const level of fruitIntroLevels) {
+      assert(
+        level.round >= 20 && level.round <= 34,
+        `Fruit rule intro must be in R20–R34, got R${level.round}`
+      );
+      assert.strictEqual(
+        level.fruitSet,
+        null,
+        `Round ${level.round} fruit rule intro must not show fruits`
+      );
+      assert(
+        levels.customCatalog[level.newRuleId],
+        `Catalog must contain ${level.newRuleId}`
+      );
+      assert(
+        levels.customCatalog[level.newRuleId].description.vi.includes(
+          "KHÁC BIỆT"
+        ),
+        "Fruit rule must explain the odd color"
+      );
+      assert(
+        levels.customCatalog[level.newRuleId].description.en.includes(
+          "DIFFERENT"
+        ),
+        "Fruit rule EN text must explain the odd color"
+      );
+    }
+    const fruitIntroRounds = fruitIntroLevels
+      .map((level) => level.round)
+      .sort((a, b) => a - b);
     assert(
-      levels[19].stroopMajority,
-      "Round 20 must showcase the ink-color majority count question"
+      fruitIntroRounds[1] - fruitIntroRounds[0] >= 3,
+      "Fruit rule intros must be at least 3 rounds apart"
     );
+
+    const fruitAppearanceLevels = levels.filter((level) => level.fruitSet);
     assert(
-      levels[22].stroopMajority,
-      "Round 23 must showcase the ink-color majority count question"
+      fruitAppearanceLevels.length >= 2,
+      "Campaign must show fruit groups after the fruit rule intro"
     );
+    for (const level of fruitAppearanceLevels) {
+      const fruitSet = level.fruitSet;
+      const rule = levels.customCatalog[fruitSet.ruleId];
+      assert(rule, `Fruit round ${level.round} must reference a real rule`);
+      const introRound = levels.find(
+        (candidate) => candidate.newRuleId === rule.id
+      ).round;
+      assert(
+        level.round > introRound,
+        `Fruit round ${level.round} must appear after its intro R${introRound}`
+      );
+      assert.strictEqual(level.questionKind, "fruit_odd");
+      assert(
+        level.buttons.includes(fruitSet.oddColor),
+        `Round ${level.round} odd fruit color must be pressable`
+      );
+      const oddFruits = fruitSet.fruits.filter((fruit) => fruit.isOdd);
+      assert.strictEqual(
+        oddFruits.length,
+        1,
+        `Round ${level.round} must contain exactly one odd fruit`
+      );
+      assert.strictEqual(
+        oddFruits[0].color,
+        fruitSet.oddColor,
+        `Round ${level.round} odd fruit must carry the odd color`
+      );
+      assert(
+        fruitSet.fruits.filter((fruit) => !fruit.isOdd).every(
+          (fruit) => fruit.color === fruitSet.majorityColor
+        ),
+        `Round ${level.round} majority fruits must share one color`
+      );
+    }
 
     // Ordered forward/reverse sequences must use every active button exactly once.
     const sequenceLevels = levels.filter(
@@ -299,30 +365,83 @@ function runTests() {
       );
     }
 
-    const transferRules = [
-      "rule_lock_transfer_1",
-      "rule_lock_transfer_2"
-    ].map((id) => ({
-      rule: levels.customCatalog[id],
-      introRound: levels.find((level) => level.newRuleId === id).round
-    }));
-    const getTransferMap = (round) => {
-      const map = {};
-      for (const { rule, introRound } of transferRules) {
-        if (round >= introRound) map[rule.oldColor] = rule.newColor;
-      }
-      return map;
-    };
-    for (const { rule } of transferRules) {
+    // New question mechanics: color mixing, longest color name, vowel count.
+    const colorMixLevels = levels.filter((level) => level.colorMix);
+    const longestNameLevels = levels.filter((level) => level.longestColorNames);
+    const vowelLevels = levels.filter((level) => level.vowelQuestion);
+    for (const level of colorMixLevels) {
       assert(
-        rule.description.vi.includes("vẫn bấm được"),
-        "Color transfer rule must say the old button remains pressable"
+        level.round >= 20,
+        `Color-mix question must start from R20, got R${level.round}`
       );
       assert(
-        rule.description.vi.includes("câu thứ tự giữ nguyên màu"),
-        "Color transfer rule must exempt sequence instructions"
+        level.buttons.includes(level.colorMix.result),
+        "Color-mix result must be a pressable button"
+      );
+      assert.strictEqual(level.colorMix.result, "purple");
+      assert.strictEqual(level.colorMix.count, 1);
+      assert.strictEqual(
+        level.baseSpec.counts[level.colorMix.result],
+        level.colorMix.count,
+        `Round ${level.round} color-mix answer must equal the mixed color`
+      );
+      assert(
+        level.prompt.vi.includes("ra màu gì"),
+        "Color-mix VI prompt must ask which color results"
       );
     }
+    for (const level of longestNameLevels) {
+      const meta = level.longestColorNames;
+      const lengths = level.buttons.map((color) => ({
+        color,
+        length: t(meta.lang, `colors.${color}`).length
+      }));
+      const maxLength = Math.max(...lengths.map((item) => item.length));
+      const expectedColors = lengths
+        .filter((item) => item.length === maxLength)
+        .map((item) => item.color)
+        .sort();
+      assert.strictEqual(meta.maxLength, maxLength);
+      assert.deepStrictEqual(
+        [...meta.colors].sort(),
+        expectedColors,
+        `Round ${level.round} longest-color answer must match the language`
+      );
+      for (const color of expectedColors) {
+        assert.strictEqual(
+          level.baseSpec.counts[color],
+          1,
+          `Round ${level.round} must press ${color} once`
+        );
+      }
+      assert.strictEqual(
+        Object.keys(level.baseSpec.counts).length,
+        expectedColors.length,
+        `Round ${level.round} longest-color question must not press extra buttons`
+      );
+    }
+    for (const level of vowelLevels) {
+      const question = level.vowelQuestion;
+      assert(question.count > 0, "Vowel count must be positive");
+      assert(question.count <= 6, "Vowel count must stay small enough to press");
+      assert(
+        level.buttons.includes(question.targetColor),
+        "Vowel-question target color must be pressable"
+      );
+      assert.strictEqual(
+        level.baseSpec.counts[question.targetColor],
+        question.count,
+        `Round ${level.round} vowel answer must equal the number of vowels`
+      );
+      assert(
+        level.prompt.vi.includes(question.word),
+        "Vowel prompt must contain the generated word"
+      );
+    }
+
+    if (colorMixLevels.length > 0) seenNewKinds.add("color_mix");
+    if (longestNameLevels.length > 0) seenNewKinds.add("longest_color_name");
+    if (vowelLevels.length > 0) seenNewKinds.add("vowel_count");
 
     // Fake rules: exactly one in R20–34 and one in R35–60, announced but inactive.
     const fakeIntroLevels = levels.filter((level) => {
@@ -360,15 +479,14 @@ function runTests() {
         `Round ${level.round} fake rule intro must not show any stimulus`
       );
       assert(
-        level.newRuleId !== "rule_lock_transfer_1" &&
-          level.newRuleId !== "rule_lock_transfer_2",
-        `Round ${level.round} fake rule must not replace a real rule intro`
+        !level.newRuleId.startsWith("rule_fruit_odd_"),
+        `Round ${level.round} fake rule must not replace a fruit rule intro`
+      );
+      assert(
+        !fruitIntroRounds.includes(level.round),
+        `Round ${level.round} fake rule must not collide with fruit rule intros`
       );
     }
-    assert(
-      fakeRounds[0] !== 20 && fakeRounds[0] !== 23 && fakeRounds[1] !== 20 && fakeRounds[1] !== 23,
-      "Fake rule rounds must not collide with R20/R23 rule intros"
-    );
 
     // Repeat-previous-presses questions: 1–2 rounds from R15+, resolved at runtime.
     const repeatLevels = levels.filter(
@@ -573,12 +691,9 @@ function runTests() {
           introLevel.buttons.includes(rule.targetColor),
           "Animal target color must be selectable"
         );
-        const effectiveTarget =
-          getTransferMap(appearanceLevel.round)[rule.targetColor] ||
-          rule.targetColor;
         assert(
-          appearanceLevel.buttons.includes(effectiveTarget),
-          `Animal target ${effectiveTarget} must be selectable when the animal appears`
+          appearanceLevel.buttons.includes(rule.targetColor),
+          `Animal target ${rule.targetColor} must be selectable when the animal appears`
         );
       }
 
@@ -628,12 +743,9 @@ function runTests() {
         lionRuleIntroLevel.buttons.includes(lionRule.targetColor),
         "Lion target color must be selectable when introduced"
       );
-      const effectiveLionTarget =
-        getTransferMap(lionSightingLevel.round)[lionRule.targetColor] ||
-        lionRule.targetColor;
       assert(
-        lionSightingLevel.buttons.includes(effectiveLionTarget),
-        `Lion target ${effectiveLionTarget} must be selectable when the lion appears`
+        lionSightingLevel.buttons.includes(lionRule.targetColor),
+        `Lion target ${lionRule.targetColor} must be selectable when the lion appears`
       );
     }
 
@@ -662,9 +774,7 @@ function runTests() {
         );
         return;
       }
-      const transferMap = getTransferMap(level.round);
-      const effectiveTarget =
-        transferMap[rule.targetColor] || rule.targetColor;
+      const effectiveTarget = rule.targetColor;
       const baseTargetCount = Object.entries(
         level.baseSpec.counts || {}
       ).reduce(
@@ -752,6 +862,35 @@ function runTests() {
           plan,
           level,
           `animal '${appearanceAnimalKey}'`
+        );
+      }
+
+      if (level.fruitSet) {
+        const fruitRule = levels.customCatalog[level.fruitSet.ruleId];
+        assert(fruitRule, `Round ${level.round} must have an active fruit rule`);
+        const oddCount = plan.phases.reduce(
+          (sum, phase) => sum + (phase.counts[level.fruitSet.oddColor] || 0),
+          0
+        );
+        assert.strictEqual(
+          oddCount,
+          fruitRule.pressCount,
+          `Round ${level.round} fruit rule must press the odd color ${fruitRule.pressCount} time(s)`
+        );
+        assert.strictEqual(
+          plan.totalPresses,
+          fruitRule.pressCount,
+          `Round ${level.round} fruit rule must suppress other presses`
+        );
+        assert(
+          plan.trace.some((entry) => entry.ruleId === fruitRule.id),
+          `Round ${level.round} fruit rule must add a trace`
+        );
+        assert(
+          !level.stimuli.includes("bomb") &&
+            !level.stimuli.includes("lion") &&
+            !animalKeys.some((key) => level.stimuli.includes(key)),
+          `Round ${level.round} fruit round must not overlap other stimuli`
         );
       }
 
@@ -889,8 +1028,14 @@ function runTests() {
     animalAppearanceGaps.size > 1,
     "Animal appearance gaps must vary across runs"
   );
+  for (const kind of ["color_mix", "longest_color_name", "vowel_count"]) {
+    assert(
+      seenNewKinds.has(kind),
+      `New question kind '${kind}' must appear across generated runs`
+    );
+  }
 
-  // 2. Explicitly test Dog Rule and color rule transfer without disabled buttons.
+  // 2. Explicitly test the Dog Rule and the Odd-Fruit Rule.
   const lockEngine = new RuleEngine();
   lockEngine.activateRule("rule_dog_red"); // Dog -> ONLY Red 1 time, no other buttons
   assert.strictEqual(
@@ -969,53 +1114,50 @@ function runTests() {
   ]);
   assert.strictEqual(lionPressRule.group, "stimulus_lion");
 
-  lockEngine.activateRule("rule_lock_transfer_1"); // Lock Red -> Transfer to Purple
-  const lockedDogPlan = lockEngine.resolveRoundPlan({
-    round: 20,
-    buttons: ["red", "blue", "yellow", "black", "white", "purple"],
-    stimuli: ["dog"],
-    baseSpec: { type: "direct_counts", counts: { yellow: 2 } }
+  const fruitRule = RuleFactories.createFruitOddRule({
+    id: "rule_fruit_test",
+    group: "stimulus_fruit_test",
+    pressCount: 2
   });
-  assert.deepStrictEqual(lockedDogPlan.phases, [
-    { id: "main", mode: "multiset", counts: { purple: 1 } }
-  ]);
-  assert(
-    !lockedDogPlan.forbiddenColors.includes("red"),
-    "Transferred color must remain pressable"
+  assert(fruitRule.description.vi.includes("KHÁC BIỆT"));
+  assert(fruitRule.description.en.includes("DIFFERENT"));
+  const fruitEngine = new RuleEngine({ rule_fruit_test: fruitRule });
+  fruitEngine.activateRule("rule_fruit_test");
+  const explicitFruitSet = RuleFactories.buildFruitSet({
+    buttons: ["red", "blue", "yellow", "black", "white", "purple"],
+    ruleId: "rule_fruit_test",
+    size: 4,
+    majorityColor: "red",
+    oddColor: "yellow"
+  });
+  assert.strictEqual(explicitFruitSet.oddColor, "yellow");
+  assert.strictEqual(
+    explicitFruitSet.fruits.filter((fruit) => fruit.isOdd).length,
+    1
   );
-
-  const lockedSequenceSteps = [
-    { color: "red", count: 1 },
-    { color: "blue", count: 1 },
-    { color: "yellow", count: 1 },
-    { color: "black", count: 1 },
-    { color: "white", count: 1 },
-    { color: "purple", count: 1 }
-  ];
-  const lockedSequencePlan = lockEngine.resolveRoundPlan({
-    round: 21,
+  const fruitPlan = fruitEngine.resolveRoundPlan({
+    round: 25,
     buttons: ["red", "blue", "yellow", "black", "white", "purple"],
     stimuli: [],
-    baseSpec: { type: "sequence", steps: lockedSequenceSteps }
+    fruitSet: explicitFruitSet,
+    baseSpec: { type: "direct_counts", counts: { blue: 2 } }
+  });
+  assert.deepStrictEqual(fruitPlan.phases, [
+    { id: "main", mode: "multiset", counts: { yellow: 2 } }
+  ]);
+  assert.strictEqual(fruitPlan.totalPresses, 2);
+
+  const unrelatedFruitPlan = fruitEngine.resolveRoundPlan({
+    round: 26,
+    buttons: ["red", "blue", "yellow", "black", "white", "purple"],
+    stimuli: [],
+    fruitSet: { ...explicitFruitSet, ruleId: "rule_other_fruit" },
+    baseSpec: { type: "direct_counts", counts: { blue: 2 } }
   });
   assert.deepStrictEqual(
-    lockedSequencePlan.phases,
-    lockedSequenceSteps.map((step) => ({
-      id: "main_seq",
-      mode: "strict_step",
-      counts: { [step.color]: 1 }
-    })),
-    "Sequence instructions must keep their original colors during color transfer"
-  );
-  assert(
-    !lockedSequencePlan.forbiddenColors.includes("red"),
-    "Old sequence color must stay pressable"
-  );
-  const lockedSequenceValidator = new AnswerValidator(lockedSequencePlan);
-  assert.notStrictEqual(
-    lockedSequenceValidator.registerPress("red").status,
-    "failed",
-    "Pressing the old color in a sequence must not fail"
+    unrelatedFruitPlan.phases,
+    [{ id: "main", mode: "multiset", counts: { blue: 2 } }],
+    "A fruit rule must not apply to another rule's fruit group"
   );
 
   // 3. Fake rules are announced but never change the required answer.

@@ -926,6 +926,24 @@ body {
   font-weight: 800;
   line-height: 1.38;
   color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inline-stimulus-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  transform: translateY(-2px);
+}
+
+.inline-stimulus-icon .stim-svg {
+  width: clamp(38px, 4.5vw, 54px);
+  height: clamp(38px, 4.5vw, 54px);
 }
 
 /* ==========================================================================

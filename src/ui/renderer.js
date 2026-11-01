@@ -620,6 +620,13 @@
       `;
     }
 
+    _formatRuleDescriptionHtml(text) {
+      if (!text) return "";
+      // Replace emoji bomb 💣 with the exact same vector SVG icon used during gameplay
+      const inlineBomb = `<span class="inline-stimulus-icon" data-stimulus="bomb">${VECTOR_ICONS.bomb}</span>`;
+      return text.replace(/💣/g, inlineBomb);
+    }
+
     _renderRuleIntroScreen(state, lang) {
       if (
         this.lastScreen === "rule_intro" &&
@@ -640,6 +647,8 @@
           ? t(lang, "replacedRuleTag")
           : t(lang, "newRuleTag");
 
+      const ruleDescHtml = this._formatRuleDescriptionHtml(rule.description[lang]);
+
       this.root.innerHTML = `
         <div class="screen rule-intro-screen${isFake ? " fake-rule-screen" : ""}">
           <div class="start-bg-facets" aria-hidden="true"></div>
@@ -654,7 +663,7 @@
               <span class="badge-dot"></span>
               ${badgeText}
             </span>
-            <h2 class="rule-intro-text">${rule.description[lang]}</h2>
+            <h2 class="rule-intro-text">${ruleDescHtml}</h2>
           </div>
         </div>
       `;

@@ -1134,6 +1134,36 @@ body {
   text-underline-offset: 0.16em;
 }
 
+.stroop-majority-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.stroop-majority-header {
+  font-size: clamp(0.95rem, 2.4vw, 1.2rem);
+  font-weight: 700;
+  line-height: 1.25;
+  color: #e2e8f0;
+  text-align: center;
+}
+
+.stroop-words-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 12px;
+  font-size: clamp(1.1rem, 2.6vw, 1.45rem);
+}
+
+html[data-theme="light"] .stroop-majority-header {
+  color: #1e293b;
+}
+
 .stroop-ink-red {
   color: #ff4d5a;
 }

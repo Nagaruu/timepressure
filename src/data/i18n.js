@@ -48,7 +48,7 @@
       victorySubtitle: "Bạn đã chinh phục xuất sắc toàn bộ các vòng!",
       gameOverTitle: "THUA RỒI!",
       gameOverSubtitle: "Dừng bước tại Vòng {round}",
-      playAgainBtn: "CHƠI LẠI TỪ ĐẦU",
+      playAgainBtn: "CHƠI LẠI",
       whyLostTitle: "Lý do thua:",
       promptWasLabel: "Câu hỏi vòng này:",
       expectedAnswerLabel: "Đáp án đúng:",

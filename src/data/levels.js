@@ -1070,12 +1070,12 @@
     }
 
     // 7. Ink-Color Majority Count (Round 20+):
-    // A list of color words painted in different ink colors. The player must count the
-    // INK colors, find the most frequent one, and press that color that many times.
+    // A concise list of color words painted in different ink colors.
+    // The player must count the INK colors, find the most frequent one, and press that color that many times.
     if (kind === "stroop_majority_count" && selectableColors.length >= 3) {
-      const wordCount = 5 + Math.round(getDifficultyProgress(round) * 2);
-      const majorityCount = Math.floor(wordCount / 2) + 1;
-      const otherCount = wordCount - majorityCount;
+      const wordCount = 5;
+      const majorityCount = 3;
+      const otherCount = 2;
 
       const inkPool = shuffle(selectableColors).slice(0, 3);
       const majorityInk = inkPool[0];
@@ -1104,12 +1104,12 @@
       return {
         stimuli: [...stimuli],
         prompt: {
-          vi: "Đếm màu đang tô của các chữ. Nhấn màu xuất hiện nhiều nhất, số lần bằng số lần xuất hiện.",
-          en: "Count the ink colors of the words. Press the most frequent color as many times as it appears."
+          vi: "Đếm màu chữ: Nhấn màu xuất hiện nhiều nhất (số lần bằng số chữ màu đó).",
+          en: "Count ink colors: Press the most frequent color as many times as it appears."
         },
         promptHtml: {
-          vi: `Đếm màu đang tô của các chữ sau. Nhấn màu xuất hiện nhiều nhất, số lần bằng số lần xuất hiện:<br>${buildWordsHtml("vi")}`,
-          en: `Count the ink colors of these words. Press the most frequent color as many times as it appears:<br>${buildWordsHtml("en")}`
+          vi: `<div class="stroop-majority-wrapper"><div class="stroop-majority-header">Đếm màu chữ: Nhấn màu xuất hiện nhiều nhất</div><div class="stroop-words-row">${buildWordsHtml("vi")}</div></div>`,
+          en: `<div class="stroop-majority-wrapper"><div class="stroop-majority-header">Count ink colors: Press most frequent color</div><div class="stroop-words-row">${buildWordsHtml("en")}</div></div>`
         },
         stroopMajority: {
           majorityInk,

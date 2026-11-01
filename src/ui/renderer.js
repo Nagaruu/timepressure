@@ -944,8 +944,6 @@
               }
             </p>
 
-            ${diagnosticHtml}
-
             <div class="summary-actions">
               <button type="button" class="cyber-start-btn summary-home-btn" data-action="return-home">
                 <span class="cyber-home-icon" aria-hidden="true">${HOME_ICON}</span>

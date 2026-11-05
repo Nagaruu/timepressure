@@ -41,6 +41,27 @@
   const PARITY_RULE_INTRO_ROUND = 5;
   const REPEAT_PREVIOUS_MIN_ROUND = 15;
   const NUMERIC_RESULT_KINDS = new Set(["parity_math", "trivia"]);
+  const EXACT_COUNT_KINDS = new Set([
+    "simple_count",
+    "zero",
+    "cond_red",
+    "direct_color",
+    "dual_color",
+    "true_false_verify",
+    "stroop_color",
+    "prev_lit_button",
+    "memory_set",
+    "color_mix",
+    "longest_color_name",
+    "animal_appearance"
+  ]);
+
+  function promptDeclaresExactCount(kind, memoryInfo = null) {
+    if (kind === "memory_recall") {
+      return Boolean(memoryInfo && memoryInfo.type !== "number");
+    }
+    return EXACT_COUNT_KINDS.has(kind);
+  }
 
 
   const TRIVIA_QUESTIONS = [
@@ -1395,7 +1416,8 @@
     // 3. Rounds 1–3: Easy (5 seconds), Red button only, MAX 3 presses per round!
     const r1to3Templates = shuffle(["simple_count", "zero", "icon_count", "math_red", "cond_red"]);
     for (let r = 1; r <= 3; r++) {
-      const task = buildRedOnlyTask(r1to3Templates[r - 1], []);
+      const taskKind = r1to3Templates[r - 1];
+      const task = buildRedOnlyTask(taskKind, []);
       levels.push({
         round: r,
         phase: 1,
@@ -1403,6 +1425,8 @@
         buttons: ["red"],
         litButton: null,
         newRuleId: null,
+        questionKind: taskKind,
+        promptDeclaresExactCount: promptDeclaresExactCount(taskKind),
         ...task
       });
     }
@@ -1913,6 +1937,7 @@
         newRuleId,
         prompt: task.prompt,
         questionKind: kind,
+        promptDeclaresExactCount: promptDeclaresExactCount(kind, memoryInfo),
         promptHtml: task.promptHtml || null,
         sequenceDirection: task.sequenceDirection || null,
         stimuli: task.stimuli,

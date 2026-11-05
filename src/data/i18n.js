@@ -41,6 +41,7 @@
         "Từ vòng 15+: có câu nhấn lại đúng các nút bạn đã nhấn ở vòng trước, gồm đúng màu, số lần và thứ tự; nếu vòng trước không nhấn thì không nhấn."
       ],
       roundOnlyLabel: "VÒNG {round}",
+      bestRoundsLabel: "BEST {rounds}",
       newRuleTag: "LUẬT MỚI",
       replacedRuleTag: "LUẬT MỚI",
       fakeRuleTag: "LUẬT GIẢ",
@@ -126,6 +127,7 @@
         "Round 15+: some questions ask you to repeat the exact buttons you pressed last round, including color, count, and order; if you pressed nothing, press nothing."
       ],
       roundOnlyLabel: "ROUND {round}",
+      bestRoundsLabel: "BEST {rounds}",
       newRuleTag: "NEW RULE",
       replacedRuleTag: "NEW RULE",
       fakeRuleTag: "FAKE RULE",

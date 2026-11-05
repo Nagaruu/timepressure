@@ -2,7 +2,7 @@
  * Game State Machine & Controller
  * - Generates fresh randomized 60 rounds & dynamic rules on every new game
  * - Shows a dedicated 7-second Rule Presentation screen (no challenge/buttons) whenever a new rule appears
- * - Evaluates answer ONLY when the round timer expires
+ * - Evaluates answers at timer expiry, except exact-count prompts that auto-advance once completed
  * - On Pass: immediate auto-advance to the next round (no waiting pulse)
  * - On Fail: Game Over screen shows detailed explanation of WHY you lost
  */
@@ -14,6 +14,9 @@
     buildRepeatPreviousRound,
     resolveRepeatTimeLimit
   } = global.PressGame;
+
+  const BEST_CLEARED_STORAGE_KEY = "time-pressure-best-cleared-rounds";
+  const AUTO_ADVANCE_DELAY_MS = 220;
 
   class GameController {
     constructor({ levels, sound, onStateChange, onTimerTick }) {
@@ -37,7 +40,8 @@
         pressHistory: [],
         roundClearedWait: false,
         victory: false,
-        failDetails: null
+        failDetails: null,
+        bestClearedRounds: this._loadBestClearedRounds()
       };
 
       this._rafId = null;
@@ -73,7 +77,8 @@
         pressHistory: [],
         roundClearedWait: false,
         victory: false,
-        failDetails: null
+        failDetails: null,
+        bestClearedRounds: this.state.bestClearedRounds
       };
 
       this._beginRound(0);
@@ -171,10 +176,20 @@
         this.sound.playButtonPress(color);
       }
 
-      // Record the press; pass/fail is evaluated ONLY when the round timer expires
       const now = performance.now();
-      this.validator.registerPress(color, now);
+      const result = this.validator.registerPress(color, now);
       this.state.pressHistory.push({ color, timestamp: now });
+
+      if (
+        result &&
+        result.status === "completed_pending" &&
+        this.state.currentRound &&
+        this.state.currentRound.promptDeclaresExactCount
+      ) {
+        this._scheduleAutoAdvance();
+        return;
+      }
+
       this._notify();
     }
 
@@ -215,8 +230,28 @@
       }
     }
 
+    _scheduleAutoAdvance() {
+      if (this.state.roundClearedWait) return;
+
+      this._stopTimers();
+      this.state.roundClearedWait = true;
+      this._notify();
+
+      this._nextRoundTimeoutId = setTimeout(() => {
+        this._nextRoundTimeoutId = null;
+        this._triggerRoundCleared();
+      }, AUTO_ADVANCE_DELAY_MS);
+    }
+
     _triggerRoundCleared() {
       this._stopTimers();
+
+      const clearedRounds = this.state.roundIndex + 1;
+      if (clearedRounds > this.state.bestClearedRounds) {
+        this.state.bestClearedRounds = clearedRounds;
+        this._saveBestClearedRounds(clearedRounds);
+      }
+
       if (this.sound) this.sound.playSuccess(this.state.roundIndex);
 
       const nextIdx = this.state.roundIndex + 1;
@@ -325,6 +360,26 @@
       if (this._nextRoundTimeoutId) {
         clearTimeout(this._nextRoundTimeoutId);
         this._nextRoundTimeoutId = null;
+      }
+    }
+
+    _loadBestClearedRounds() {
+      try {
+        if (typeof localStorage === "undefined") return 0;
+        const raw = localStorage.getItem(BEST_CLEARED_STORAGE_KEY);
+        const value = Number.parseInt(raw, 10);
+        return Number.isFinite(value) && value > 0 ? value : 0;
+      } catch (error) {
+        return 0;
+      }
+    }
+
+    _saveBestClearedRounds(value) {
+      try {
+        if (typeof localStorage === "undefined") return;
+        localStorage.setItem(BEST_CLEARED_STORAGE_KEY, String(value));
+      } catch (error) {
+        // Ignore storage failures (private mode, disabled storage, etc.)
       }
     }
 

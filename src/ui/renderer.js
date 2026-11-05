@@ -181,6 +181,7 @@
       this.buttonArenaEl = null;
       this.promptTextEl = null;
       this.roundPillTextEl = null;
+      this.roundPillBestEl = null;
       this.stimuliRowEl = null;
       this._currentUrgency = null;
 
@@ -747,6 +748,11 @@
           round: roundData.round
         });
       }
+      if (this.roundPillBestEl) {
+        this.roundPillBestEl.textContent = t(lang, "bestRoundsLabel", {
+          rounds: state.bestClearedRounds || 0
+        });
+      }
       if (this.promptTextEl) {
         this.promptTextEl.innerHTML =
           (roundData.promptHtml && roundData.promptHtml[lang]) || roundData.prompt[lang];
@@ -837,6 +843,8 @@
               <div class="round-pill">
                 <span class="round-pill-dot"></span>
                 <span class="round-pill-text">${t(lang, "roundOnlyLabel", { round: roundData.round })}</span>
+                <span class="round-pill-divider" aria-hidden="true"></span>
+                <span class="round-pill-best">${t(lang, "bestRoundsLabel", { rounds: state.bestClearedRounds || 0 })}</span>
               </div>
               <button type="button" class="circle-icon-btn home-corner-btn" data-action="return-home" aria-label="${t(lang, "homeBtn")}" title="${t(lang, "homeBtn")}">${HOME_ICON}</button>
             </header>
@@ -870,6 +878,7 @@
       this.buttonArenaEl = this.root.querySelector(".button-arena");
       this.promptTextEl = this.root.querySelector(".prompt-text");
       this.roundPillTextEl = this.root.querySelector(".round-pill-text");
+      this.roundPillBestEl = this.root.querySelector(".round-pill-best");
       this.stimuliRowEl = this.root.querySelector(".stimuli-row");
       this._currentUrgency = "normal";
 
@@ -942,6 +951,9 @@
                   ? t(lang, "victorySubtitle")
                   : t(lang, "gameOverSubtitle", { round: state.roundIndex + 1 })
               }
+            </p>
+            <p class="summary-best-line">
+              ${t(lang, "bestRoundsLabel", { rounds: state.bestClearedRounds || 0 })}
             </p>
 
             <div class="summary-actions">

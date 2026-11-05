@@ -61,12 +61,24 @@ function runTests() {
   const firstRunPrompts = [];
   const seenNewKinds = new Set();
   let differencesFound = 0;
+  let exactCountRounds = 0;
+  let nonExactCountRounds = 0;
   const animalDelays = new Set();
   const animalAppearanceGaps = new Set();
 
   for (let run = 0; run < 10; run++) {
     const levels = generateGameLevels();
     assert.strictEqual(levels.length, 60, "Game must have 60 rounds");
+
+    for (const level of levels) {
+      assert.strictEqual(
+        typeof level.promptDeclaresExactCount,
+        "boolean",
+        `Round ${level.round} must declare promptDeclaresExactCount as a boolean`
+      );
+      if (level.promptDeclaresExactCount) exactCountRounds++;
+      else nonExactCountRounds++;
+    }
 
     // Rounds 1–3: Easy (5s), Red only, max 3 presses per round
     for (let i = 0; i < 3; i++) {
@@ -1028,6 +1040,8 @@ function runTests() {
   }
 
   assert(differencesFound > 0, "Generator must produce randomized questions across runs");
+  assert(exactCountRounds > 0, "Some rounds must allow early auto-advance");
+  assert(nonExactCountRounds > 0, "Some rounds must still wait for the timer");
   assert(
     animalDelays.size > 1,
     "Animal rule-to-appearance delays must vary across runs"

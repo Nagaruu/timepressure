@@ -1000,15 +1000,16 @@ body {
 .round-pill {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: #0c0c12;
   border: 1.5px solid rgba(255, 255, 255, 0.2);
   border-radius: 999px;
-  padding: 8px 26px;
+  padding: 8px 18px;
   font-size: 0.86rem;
   font-weight: 800;
   letter-spacing: 0.22em;
   color: #f8fafc;
+  white-space: nowrap;
 }
 
 .round-pill-dot {
@@ -1017,6 +1018,38 @@ body {
   border-radius: 50%;
   background: #ef4444;
   box-shadow: 0 0 8px #ef4444;
+}
+
+.round-pill-divider {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
+}
+
+.round-pill-best {
+  font-size: clamp(0.62rem, 1.6vw, 0.72rem);
+  letter-spacing: 0.14em;
+  color: #facc15;
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .round-pill {
+    gap: 6px;
+    padding: 7px 12px;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+  }
+
+  .round-pill-best {
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+  }
+
+  .round-pill-divider {
+    height: 12px;
+  }
 }
 
 .stage-area {
@@ -1648,6 +1681,14 @@ html[data-theme="light"] .stroop-majority-header {
   color: var(--text-muted);
   font-weight: 700;
   margin-bottom: 4px;
+}
+
+.summary-best-line {
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: #facc15;
+  margin-bottom: 6px;
 }
 
 .summary-actions {
